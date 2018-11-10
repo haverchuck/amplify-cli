@@ -6,6 +6,24 @@ const [sharedId] = uuid().split('-');
 const generalDefaults = () => ({
   resourceName: `cognito${sharedId}`,
   authSelections: 'identityPoolAndUserPool',
+  authRoleName: {
+    Ref: 'AuthRoleName',
+  },
+  unauthRoleName: {
+    Ref: 'UnauthRoleName',
+  },
+  authRoleArn: {
+    'Fn::GetAtt': [
+      'AuthRole',
+      'Arn',
+    ],
+  },
+  unauthRoleArn: {
+    'Fn::GetAtt': [
+      'UnauthRole',
+      'Arn',
+    ],
+  },
 });
 
 const userPoolDefaults = projectName => ({
@@ -71,6 +89,15 @@ const functionMap = {
   identityPoolOnly: identityPoolDefaults,
 };
 
+const roles = {
+  authRoleName: {
+    Ref: 'AuthRoleName',
+  },
+  unauthRoleName: {
+    Ref: 'UnauthRoleName',
+  },
+};
+
 const entityKeys = {
   identityPoolKeys: Object.keys(identityPoolDefaults('')),
   userPoolKeys: Object.keys(userPoolDefaults('')),
@@ -92,4 +119,5 @@ module.exports = {
   functionMap,
   generalDefaults,
   entityKeys,
+  roles,
 };
