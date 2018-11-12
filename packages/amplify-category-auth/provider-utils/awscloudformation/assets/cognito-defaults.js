@@ -3,9 +3,7 @@ const { coreAttributes, appClientReadAttributes, booleanOptions } = require('./s
 
 const [sharedId] = uuid().split('-');
 
-const generalDefaults = () => ({
-  resourceName: `cognito${sharedId}`,
-  authSelections: 'identityPoolAndUserPool',
+const roles = {
   authRoleName: {
     Ref: 'AuthRoleName',
   },
@@ -24,6 +22,12 @@ const generalDefaults = () => ({
       'Arn',
     ],
   },
+}
+
+const generalDefaults = () => ({
+  resourceName: `cognito${sharedId}`,
+  authSelections: 'identityPoolAndUserPool',
+  ...roles,
 });
 
 const userPoolDefaults = projectName => ({
@@ -89,14 +93,6 @@ const functionMap = {
   identityPoolOnly: identityPoolDefaults,
 };
 
-const roles = {
-  authRoleName: {
-    Ref: 'AuthRoleName',
-  },
-  unauthRoleName: {
-    Ref: 'UnauthRoleName',
-  },
-};
 
 const entityKeys = {
   identityPoolKeys: Object.keys(identityPoolDefaults('')),
