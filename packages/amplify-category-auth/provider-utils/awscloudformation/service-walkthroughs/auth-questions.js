@@ -95,8 +95,6 @@ ${helpTextArray.join(`
     coreAnswers.selectedParties = JSON.stringify(coreAnswers.selectedParties);
   }
 
-  // const roles = await context.amplify.executeProviderUtils(context, 'awscloudformation', 'staticRoles');
-
   return {
     ...coreAnswers,
   };
