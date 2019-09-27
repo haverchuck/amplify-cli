@@ -7,21 +7,78 @@ const ModelAuthTransformer = require('graphql-auth-transformer').default;
 const ModelConnectionTransformer = require('graphql-connection-transformer').default;
 const SearchableModelTransformer = require('graphql-elasticsearch-transformer').default;
 const VersionedModelTransformer = require('graphql-versioned-transformer').default;
+const FunctionTransformer = require('graphql-function-transformer').default;
+const HTTPTransformer = require('graphql-http-transformer').default;
+const KeyTransformer = require('graphql-key-transformer').default;
 const providerName = require('./constants').ProviderName;
 const TransformPackage = require('graphql-transformer-core');
 
-const { collectDirectiveNames } = TransformPackage;
+const {
+  collectDirectivesByTypeNames,
+  readTransformerConfiguration,
+  writeTransformerConfiguration,
+} = TransformPackage;
 
 const category = 'api';
 const parametersFileName = 'parameters.json';
 const schemaFileName = 'schema.graphql';
 const schemaDirName = 'schema';
 
-function checkForCommonIssues(usedDirectives, opts) {
+function failOnInvalidAuthType(usedDirectives, opts) {
   if (usedDirectives.includes('auth') && !opts.isUserPoolEnabled) {
-    throw new Error(`You are trying to use the @auth directive without enabling Amazon Cognito user pools for your API.
-Run \`amplify update api\` and choose "Amazon Cognito User Pool" as the authorization type for the API.`);
+    throw new Error(`You are trying to
+use the @auth directive without enabling Amazon Cognito user pools for your API.
+Run \`amplify update api\` and choose
+"Amazon Cognito User Pool" as the authorization type for the API.`);
   }
+}
+
+function warnOnAuth(context, map) {
+  const unAuthModelTypes = Object.keys(map).filter(type => (!map[type].includes('auth') && map[type].includes('model')));
+  if (unAuthModelTypes.length) {
+    context.print.warning('\nThe following types do not have \'@auth\' enabled. Consider using @auth with @model');
+    context.print.warning(unAuthModelTypes.map(type => `\t - ${type}`).join('\n'));
+    context.print.info('Learn more about @auth here: https://aws-amplify.github.io/docs/cli-toolchain/graphql#auth \n');
+  }
+}
+
+/**
+ * @TODO Include a map of versions to keep track
+ */
+async function transformerVersionCheck(
+  context, resourceDir, cloudBackendDirectory,
+  updatedResources, usedDirectives,
+) {
+  const versionChangeMessage = 'The default behaviour for @auth has changed in the latest version of Amplify\nRead here for details: https://aws-amplify.github.io/docs/cli-toolchain/graphql#authorizing-subscriptions';
+  let transformerConfig;
+  // this is where we check if there is a prev version of the transformer being used
+  // by using the transformer.conf.json file
+  try {
+    transformerConfig = await readTransformerConfiguration(cloudBackendDirectory);
+  } catch (err) {
+    // check local resource if the question has been answered before
+    transformerConfig = await readTransformerConfiguration(resourceDir);
+  }
+  const resources = updatedResources.filter(resource => resource.service === 'AppSync');
+  if (!transformerConfig.Version && usedDirectives.includes('auth')
+  && resources.length > 0) {
+    if (context.exeInfo &&
+      context.exeInfo.inputParams && context.exeInfo.inputParams.yes) {
+      context.print.warning(`\n${versionChangeMessage}\n`);
+    } else {
+      const response = await inquirer.prompt({
+        name: 'transformerConfig',
+        type: 'confirm',
+        message: `\n${versionChangeMessage} \n Do you wish to continue?`,
+        default: false,
+      });
+      if (!response.transformerConfig) {
+        process.exit(0);
+      }
+    }
+  }
+  transformerConfig.Version = 4.0;
+  await writeTransformerConfiguration(resourceDir, transformerConfig);
 }
 
 function apiProjectIsFromOldVersion(pathToProject, resourcesToBeCreated) {
@@ -139,7 +196,7 @@ async function transformGraphQLSchema(context, options) {
 
   if (!parameters && fs.existsSync(parametersFilePath)) {
     try {
-      parameters = JSON.parse(fs.readFileSync(parametersFilePath));
+      parameters = context.amplify.readJsonFile(parametersFilePath);
     } catch (e) {
       parameters = {};
     }
@@ -199,46 +256,74 @@ async function transformGraphQLSchema(context, options) {
   const project = await TransformPackage.readProjectConfiguration(resourceDir);
 
   // Check for common errors
-  const usedDirectives = collectDirectiveNames(project.schema);
-  checkForCommonIssues(
-    usedDirectives,
+  const directiveMap = collectDirectivesByTypeNames(project.schema);
+  failOnInvalidAuthType(
+    directiveMap.directives,
     { isUserPoolEnabled: Boolean(parameters.AuthCognitoUserPoolId) },
+  );
+  warnOnAuth(
+    context,
+    directiveMap.types,
+  );
+
+  await transformerVersionCheck(
+    context,
+    resourceDir,
+    previouslyDeployedBackendDir,
+    resourcesToBeUpdated,
+    directiveMap.directives,
   );
 
   const authMode = parameters.AuthCognitoUserPoolId ? 'AMAZON_COGNITO_USER_POOLS' : 'API_KEY';
   const transformerList = [
-    new DynamoDBModelTransformer(getModelConfig(project)),
-    new ModelAuthTransformer({ authMode }),
+    // TODO: Removing until further discussion. `getTransformerOptions(project, '@model')`
+    new DynamoDBModelTransformer(),
     new ModelConnectionTransformer(),
     new VersionedModelTransformer(),
+    new FunctionTransformer(),
+    new HTTPTransformer(),
+    new KeyTransformer(),
+    // TODO: Build dependency mechanism into transformers. Auth runs last
+    // so any resolvers that need to be protected will already be created.
+    new ModelAuthTransformer({ authMode }),
   ];
 
-  if (usedDirectives.includes('searchable')) {
+  if (directiveMap.directives.includes('searchable')) {
     transformerList.push(new SearchableModelTransformer());
   }
 
-  await TransformPackage.buildAPIProject({
-    projectDirectory: resourceDir,
+  const buildConfig = {
+    projectDirectory: options.dryrun ? false : resourceDir,
     transformers: transformerList,
     rootStackFileName: 'cloudformation-template.json',
-  });
+    currentCloudBackendDirectory: previouslyDeployedBackendDir,
+    disableResolverOverrides: options.disableResolverOverrides,
+  };
+  const transformerOutput = await TransformPackage.buildAPIProject(buildConfig);
 
   context.print.success(`\nGraphQL schema compiled successfully.\n\nEdit your schema at ${schemaFilePath} or \
 place .graphql files in a directory at ${schemaDirPath}`);
 
   const jsonString = JSON.stringify(parameters, null, 4);
 
-  fs.writeFileSync(parametersFilePath, jsonString, 'utf8');
+  if (!options.dryRun) {
+    fs.writeFileSync(parametersFilePath, jsonString, 'utf8');
+  }
+  return transformerOutput;
 }
 
-function getModelConfig(project) {
-  if (project && project.config && project.config.Model && project.config.Model.BillingMode) {
-    return {
-      BillingMode: project.config.Model.BillingMode,
-    };
-  }
-  return undefined;
-}
+// TODO: Remove until further discussion
+// function getTransformerOptions(project, transformerName) {
+//   if (
+//     project &&
+//     project.config &&
+//     project.config.TransformerOptions &&
+//     project.config.TransformerOptions[transformerName]
+//   ) {
+//     return project.config.TransformerOptions[transformerName];
+//   }
+//   return undefined;
+// }
 
 module.exports = {
   transformGraphQLSchema,

@@ -12,19 +12,20 @@ const { transformGraphQLSchema } = require('./transform-graphql-schema');
 const { displayHelpfulURLs } = require('./display-helpful-urls');
 const { downloadAPIModels } = require('./download-api-models');
 const { loadResourceParameters } = require('../src/resourceParams');
+const { uploadAuthTriggerFiles } = require('./upload-auth-trigger-files');
 const archiver = require('../src/utils/archiver');
 
 const spinner = ora('Updating resources in the cloud. This may take a few minutes...');
 const nestedStackFileName = 'nested-cloudformation-stack.yml';
 const optionalBuildDirectoryName = 'build';
 
-async function run(context, category, resourceName) {
+async function run(context, resourceDefinition) {
   const {
     resourcesToBeCreated,
     resourcesToBeUpdated,
     resourcesToBeDeleted,
     allResources,
-  } = await context.amplify.getResourceStatus(category, resourceName, providerName);
+  } = resourceDefinition;
 
   const resources = resourcesToBeCreated.concat(resourcesToBeUpdated);
   let projectDetails = context.amplify.getProjectDetails();
@@ -35,11 +36,11 @@ async function run(context, category, resourceName) {
     .then(() => transformGraphQLSchema(context, {
       noConfig: true,
       handleMigration: opts =>
-        updateStackForAPIMigration(context, 'api', resourceName, opts),
+        updateStackForAPIMigration(context, 'api', undefined, opts),
     }))
-    .then(() => uploadAppSyncFiles(context, resources))
+    .then(() => uploadAppSyncFiles(context, resources, allResources))
     .then(() => prePushGraphQLCodegen(context, resourcesToBeCreated, resourcesToBeUpdated))
-    .then(() => updateS3Templates(context, allResources, projectDetails.amplifyMeta))
+    .then(() => updateS3Templates(context, resources, projectDetails.amplifyMeta))
     .then(() => {
       spinner.start();
       projectDetails = context.amplify.getProjectDetails();
@@ -62,10 +63,11 @@ async function run(context, category, resourceName) {
         );
       }
     })
+    .then(() => uploadAuthTriggerFiles(context, resourcesToBeCreated, resourcesToBeUpdated))
     .then(async () => {
       let {
         allResources,
-      } = await context.amplify.getResourceStatus(category, resourceName);
+      } = await context.amplify.getResourceStatus();
 
 
       const newAPIresources = [];
@@ -111,7 +113,7 @@ async function updateStackForAPIMigration(context, category, resourceName, optio
   resources = allResources.filter(resource => resource.service === 'AppSync');
 
   return packageResources(context, resources)
-    .then(() => uploadAppSyncFiles(context, resources, {
+    .then(() => uploadAppSyncFiles(context, resources, allResources, {
       useDeprecatedParameters: isReverting, defaultParams: { APIKeyExpirationEpoch: -1 },
     }))
     .then(() => updateS3Templates(context, resources, projectDetails.amplifyMeta))
@@ -231,7 +233,8 @@ function packageResources(context, resources) {
 
         const files = fs.readdirSync(resourceDir);
         // Fetch all the Cloudformation templates for the resource (can be json or yml)
-        const cfnFiles = files.filter(file => file.indexOf('template') !== -1);
+        const cfnFiles = files.filter(file =>
+          (file.indexOf('template') !== -1) && /\.(json|yaml|yml)$/.test(file));
 
         if (cfnFiles.length !== 1) {
           context.print.error('Only one CloudFormation template is allowed in the resource directory');
@@ -242,12 +245,19 @@ function packageResources(context, resources) {
         const cfnFile = cfnFiles[0];
         const cfnFilePath = path.normalize(path.join(resourceDir, cfnFile));
 
-        const cfnMeta = JSON.parse(fs.readFileSync(cfnFilePath));
+        const cfnMeta = context.amplify.readJsonFile(cfnFilePath);
 
-        cfnMeta.Resources.LambdaFunction.Properties.Code = {
-          S3Bucket: s3Bucket,
-          S3Key: s3Key,
-        };
+        if (cfnMeta.Resources.LambdaFunction.Type === 'AWS::Serverless::Function') {
+          cfnMeta.Resources.LambdaFunction.Properties.CodeUri = {
+            Bucket: s3Bucket,
+            Key: s3Key,
+          };
+        } else {
+          cfnMeta.Resources.LambdaFunction.Properties.Code = {
+            S3Bucket: s3Bucket,
+            S3Key: s3Key,
+          };
+        }
 
         const jsonString = JSON.stringify(cfnMeta, null, '\t');
         fs.writeFileSync(cfnFilePath, jsonString, 'utf8');
@@ -302,7 +312,7 @@ function updateCloudFormationNestedStack(
   const jsonString = JSON.stringify(nestedStack, null, '\t');
   context.filesystem.write(nestedStackFilepath, jsonString);
 
-  return new Cloudformation(context, undefined, userAgentAction)
+  return new Cloudformation(context, userAgentAction)
     .then(cfnItem => cfnItem.updateResourceStack(
       path.normalize(path.join(backEndDir, providerName)),
       nestedStackFileName,
@@ -390,16 +400,18 @@ function uploadTemplateToS3(context, resourceDir, cfnFile, category, resourceNam
 /* eslint-disable */
 function formNestedStack(context, projectDetails, categoryName, resourceName, serviceName, skipEnv) {
 /* eslint-enable */
-  const nestedStack = JSON.parse(fs.readFileSync(`${__dirname}/rootStackTemplate.json`));
-
+  const nestedStack = context.amplify.readJsonFile(`${__dirname}/rootStackTemplate.json`);
   const { amplifyMeta } = projectDetails;
-
+  let authResourceName;
   let categories = Object.keys(amplifyMeta);
   categories = categories.filter(category => category !== 'provider');
   categories.forEach((category) => {
     const resources = Object.keys(amplifyMeta[category]);
     resources.forEach((resource) => {
       const resourceDetails = amplifyMeta[category][resource];
+      if (category === 'auth') {
+        authResourceName = resource;
+      }
       const resourceKey = category + resource;
       let templateURL;
       if (resourceDetails.providerPlugin) {
@@ -452,7 +464,21 @@ function formNestedStack(context, projectDetails, categoryName, resourceName, se
       }
     });
   });
+
+  if (authResourceName) {
+    updateIdPRolesInNestedStack(context, nestedStack, authResourceName);
+  }
   return nestedStack;
+}
+
+function updateIdPRolesInNestedStack(context, nestedStack, authResourceName) {
+  const authLogicalResourceName = `auth${authResourceName}`;
+  const idpUpdateRoleCfn = context.amplify.readJsonFile(`${__dirname}/update-idp-roles-cfn.json`);
+
+  idpUpdateRoleCfn.UpdateRolesWithIDPFunction.DependsOn.push(authLogicalResourceName);
+  idpUpdateRoleCfn.UpdateRolesWithIDPFunctionOutputs.Properties.idpId['Fn::GetAtt'].unshift(authLogicalResourceName);
+
+  Object.assign(nestedStack.Resources, idpUpdateRoleCfn);
 }
 
 module.exports = {

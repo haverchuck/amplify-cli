@@ -3,6 +3,146 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [1.14.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.14.0) (2019-08-30)
+
+
+### Bug Fixes
+
+* move test package dependencies to devDependencies ([#2034](https://github.com/aws-amplify/amplify-cli/issues/2034)) ([f5623d0](https://github.com/aws-amplify/amplify-cli/commit/f5623d0))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+* mock support for API, function and storage ([#1893](https://github.com/aws-amplify/amplify-cli/issues/1893)) ([372e534](https://github.com/aws-amplify/amplify-cli/commit/372e534))
+
+
+
+
+
+# [1.13.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.13.0) (2019-08-28)
+
+
+### Bug Fixes
+
+* move test package dependencies to devDependencies ([#2034](https://github.com/aws-amplify/amplify-cli/issues/2034)) ([f5623d0](https://github.com/aws-amplify/amplify-cli/commit/f5623d0))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+* mock support for API, function and storage ([#1893](https://github.com/aws-amplify/amplify-cli/issues/1893)) ([372e534](https://github.com/aws-amplify/amplify-cli/commit/372e534))
+
+
+
+
+
+# [1.12.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.12.0) (2019-08-13)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+* mock support for API, function and storage ([#1893](https://github.com/aws-amplify/amplify-cli/issues/1893)) ([372e534](https://github.com/aws-amplify/amplify-cli/commit/372e534))
+
+
+
+
+
+# [1.11.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.11.0) (2019-08-07)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+* mock support for API, function and storage ([#1893](https://github.com/aws-amplify/amplify-cli/issues/1893)) ([372e534](https://github.com/aws-amplify/amplify-cli/commit/372e534))
+
+
+
+
+
+# [1.10.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.10.0) (2019-08-02)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.9.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.2...amplify-frontend-ios@1.9.0) (2019-07-31)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+## [1.8.2](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.1...amplify-frontend-ios@1.8.2) (2019-06-20)
+
+
+### Bug Fixes
+
+* **cli:** fix inquirer version ([#1690](https://github.com/aws-amplify/amplify-cli/issues/1690)) ([9246032](https://github.com/aws-amplify/amplify-cli/commit/9246032)), closes [#1688](https://github.com/aws-amplify/amplify-cli/issues/1688)
+
+
+
+
+
+## [1.8.1](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.8.0...amplify-frontend-ios@1.8.1) (2019-05-17)
+
+
+### Bug Fixes
+
+* conditionally generation of oAuth config for iOS and Android [#1472](https://github.com/aws-amplify/amplify-cli/issues/1472) ([3767192](https://github.com/aws-amplify/amplify-cli/commit/3767192)), closes [#1470](https://github.com/aws-amplify/amplify-cli/issues/1470)
+
+
+
+
+
+# [1.8.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.6.0...amplify-frontend-ios@1.8.0) (2019-05-07)
+
+
+### Features
+
+* add ClientDatabasePrefi to support mixed auth ([#1382](https://github.com/aws-amplify/amplify-cli/issues/1382)) ([8f03a37](https://github.com/aws-amplify/amplify-cli/commit/8f03a37))
+
+
+
+
+
+# [1.7.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.6.0...amplify-frontend-ios@1.7.0) (2019-05-06)
+
+
+### Features
+
+* add ClientDatabasePrefi to support mixed auth ([#1382](https://github.com/aws-amplify/amplify-cli/issues/1382)) ([8f03a37](https://github.com/aws-amplify/amplify-cli/commit/8f03a37))
+
+
+
+
+
+# [1.6.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.5.1...amplify-frontend-ios@1.6.0) (2019-04-30)
+
+
+### Bug Fixes
+
+* update CLI to handle UTF8 BOM ([#1357](https://github.com/aws-amplify/amplify-cli/issues/1357)) ([b0afa07](https://github.com/aws-amplify/amplify-cli/commit/b0afa07)), closes [#1355](https://github.com/aws-amplify/amplify-cli/issues/1355) [#1122](https://github.com/aws-amplify/amplify-cli/issues/1122)
+
+
+### Features
+
+* Multiauth external api add ([#1329](https://github.com/aws-amplify/amplify-cli/issues/1329)) ([13d9fc3](https://github.com/aws-amplify/amplify-cli/commit/13d9fc3))
+
+
+
+
+
 ## [1.5.1](https://github.com/aws-amplify/amplify-cli/compare/amplify-frontend-ios@1.4.0...amplify-frontend-ios@1.5.1) (2019-04-09)
 
 **Note:** Version bump only for package amplify-frontend-ios

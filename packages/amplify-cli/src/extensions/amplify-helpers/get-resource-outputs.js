@@ -1,10 +1,10 @@
-const fs = require('fs');
 const pathManager = require('./path-manager');
+const { readJsonFile } = require('./read-json-file');
 
 function getResourceOutputs(amplifyMeta) {
   if (!amplifyMeta) {
     const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-    amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+    amplifyMeta = readJsonFile(amplifyMetaFilePath);
   }
 
   // Build the provider object
@@ -65,7 +65,9 @@ function getResourceOutputs(amplifyMeta) {
   if (outputsByProvider.awscloudformation) {
     outputsForFrontend.metadata = outputsByProvider.awscloudformation.metadata;
   }
-
+  if (amplifyMeta && amplifyMeta.testMode) {
+    outputsForFrontend.testMode = true;
+  }
   return { outputsByProvider, outputsByCategory, outputsForFrontend };
 }
 

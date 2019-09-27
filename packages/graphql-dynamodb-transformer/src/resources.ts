@@ -1,9 +1,9 @@
-import { DynamoDB, AppSync, IAM, Template, Fn, StringParameter, NumberParameter, Refs, IntrinsicFunction } from 'cloudform-types'
+import { DynamoDB, AppSync, IAM, Template, Fn, StringParameter, NumberParameter, Refs, IntrinsicFunction, DeletionPolicy } from 'cloudform-types'
 import Output from 'cloudform-types/types/output';
 import {
     DynamoDBMappingTemplate, printBlock, str, print,
     ref, obj, set, nul,
-    ifElse, compoundExpression, qref, bool, equals, iff, raw, comment
+    ifElse, compoundExpression, qref, bool, equals, iff, raw, comment, forEach, list
 } from 'graphql-mapping-template'
 import { ResourceConstants, plurality, graphqlName, toUpper, ModelResourceIDs } from 'graphql-transformer-common'
 
@@ -45,6 +45,14 @@ export class ResourceFactory {
                     'false'
                 ]
             }),
+            [ResourceConstants.PARAMETERS.DynamoDBEnableServerSideEncryption]: new StringParameter({
+                Description: 'Enable server side encryption powered by KMS.',
+                Default: 'true',
+                AllowedValues: [
+                    'true',
+                    'false'
+                ]
+            })
         }
     }
 
@@ -66,7 +74,9 @@ export class ResourceFactory {
                     Fn.Equals(Fn.Ref(ResourceConstants.PARAMETERS.DynamoDBBillingMode), 'PAY_PER_REQUEST'),
 
                 [ResourceConstants.CONDITIONS.ShouldUsePointInTimeRecovery]:
-                    Fn.Equals(Fn.Ref(ResourceConstants.PARAMETERS.DynamoDBEnablePointInTimeRecovery), 'true')
+                    Fn.Equals(Fn.Ref(ResourceConstants.PARAMETERS.DynamoDBEnablePointInTimeRecovery), 'true'),
+                [ResourceConstants.CONDITIONS.ShouldUseServerSideEncryption]:
+                    Fn.Equals(Fn.Ref(ResourceConstants.PARAMETERS.DynamoDBEnableServerSideEncryption), 'true'),
             }
         }
     }
@@ -115,10 +125,40 @@ export class ResourceFactory {
         }
     }
 
+    public makeTableStreamArnOutput(resourceId: string): Output {
+        return {
+            Description: "Your DynamoDB table StreamArn.",
+            Value: Fn.GetAtt(resourceId, "StreamArn"),
+            Export: {
+                Name: Fn.Join(':', [Fn.Ref(ResourceConstants.PARAMETERS.AppSyncApiId), "GetAtt", resourceId, "StreamArn"])
+            }
+        }
+    }
+
+    public makeDataSourceOutput(resourceId: string): Output {
+        return {
+            Description: "Your model DataSource name.",
+            Value: Fn.GetAtt(resourceId, "Name"),
+            Export: {
+                Name: Fn.Join(':', [Fn.Ref(ResourceConstants.PARAMETERS.AppSyncApiId), "GetAtt", resourceId, "Name"])
+            }
+        }
+    }
+
+    public makeTableNameOutput(resourceId: string): Output {
+        return {
+            Description: "Your DynamoDB table name.",
+            Value: Fn.Ref(resourceId),
+            Export: {
+                Name: Fn.Join(':', [Fn.Ref(ResourceConstants.PARAMETERS.AppSyncApiId), "GetAtt", resourceId, "Name"])
+            }
+        }
+    }
+
     /**
      * Create a DynamoDB table for a specific type.
      */
-    public makeModelTable(typeName: string, hashKey: string = 'id', rangeKey?: string) {
+    public makeModelTable(typeName: string, hashKey: string = 'id', rangeKey?: string, deletionPolicy: DeletionPolicy = DeletionPolicy.Delete) {
         const keySchema = hashKey && rangeKey ? [
             {
                 AttributeName: hashKey,
@@ -156,7 +196,11 @@ export class ResourceFactory {
                 }
             ) as any,
             SSESpecification: {
-                SSEEnabled: true
+                SSEEnabled: Fn.If(
+                    ResourceConstants.CONDITIONS.ShouldUseServerSideEncryption,
+                    true,
+                    false
+                )
             },
             PointInTimeRecoverySpecification: Fn.If(
                 ResourceConstants.CONDITIONS.ShouldUsePointInTimeRecovery,
@@ -165,7 +209,7 @@ export class ResourceFactory {
                 },
                 Refs.NoValue
             ) as any,
-        })
+        }).deletionPolicy(deletionPolicy)
     }
 
     private dynamoDBTableName(typeName: string): IntrinsicFunction {
@@ -283,13 +327,18 @@ export class ResourceFactory {
             TypeName: mutationTypeName,
             RequestMappingTemplate: printBlock('Prepare DynamoDB PutItem Request')(
                 compoundExpression([
-                    qref('$context.args.input.put("createdAt", $util.time.nowISO8601())'),
-                    qref('$context.args.input.put("updatedAt", $util.time.nowISO8601())'),
+                    qref('$context.args.input.put("createdAt", $util.defaultIfNull($ctx.args.input.createdAt, $util.time.nowISO8601()))'),
+                    qref('$context.args.input.put("updatedAt", $util.defaultIfNull($ctx.args.input.updatedAt, $util.time.nowISO8601()))'),
                     qref(`$context.args.input.put("__typename", "${type}")`),
                     DynamoDBMappingTemplate.putItem({
-                        key: obj({
-                            id: raw(`$util.dynamodb.toDynamoDBJson($util.defaultIfNullOrBlank($ctx.args.input.id, $util.autoId()))`)
-                        }),
+                        key: ifElse(
+                            ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                            raw(`$util.toJson(\$${ResourceConstants.SNIPPETS.ModelObjectKey})`),
+                            obj({
+                                id: raw(`$util.dynamodb.toDynamoDBJson($util.defaultIfNullOrBlank($ctx.args.input.id, $util.autoId()))`)
+                            }),
+                            true
+                        ),
                         attributeValues: ref('util.dynamodb.toMapValuesJson($context.args.input)'),
                         condition: obj({
                             expression: str(`attribute_not_exists(#id)`),
@@ -319,19 +368,48 @@ export class ResourceFactory {
                         raw(`$${ResourceConstants.SNIPPETS.AuthCondition} && $${ResourceConstants.SNIPPETS.AuthCondition}.expression != ""`),
                         compoundExpression([
                             set(ref('condition'), ref(ResourceConstants.SNIPPETS.AuthCondition)),
-                            qref('$condition.put("expression", "$condition.expression AND attribute_exists(#id)")'),
-                            qref('$condition.expressionNames.put("#id", "id")')
+                            ifElse(
+                                ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                                forEach(ref('entry'), ref(`${ResourceConstants.SNIPPETS.ModelObjectKey}.entrySet()`),
+                                [
+                                    qref('$condition.put("expression", "$condition.expression AND attribute_exists(#keyCondition$velocityCount)")'),
+                                    qref('$condition.expressionNames.put("#keyCondition$velocityCount", "$entry.key")')
+                                ]),
+                                compoundExpression([
+                                    qref('$condition.put("expression", "$condition.expression AND attribute_exists(#id)")'),
+                                    qref('$condition.expressionNames.put("#id", "id")')
+                                ])
+                            )
                         ]),
-                        set(ref('condition'), obj({
-                            expression: str("attribute_exists(#id)"),
-                            expressionNames: obj({
-                                "#id": str("id")
-                            }),
-                            expressionValues: obj({}),
-                        }))
+                        ifElse(
+                            ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                            compoundExpression([
+                                set(ref('condition'), obj({
+                                    expression: str(""),
+                                    expressionNames: obj({}),
+                                    expressionValues: obj({}),
+                                })),
+                                forEach(ref('entry'), ref(`${ResourceConstants.SNIPPETS.ModelObjectKey}.entrySet()`), [
+                                    ifElse(
+                                        raw('$velocityCount == 1'),
+                                        qref('$condition.put("expression", "attribute_exists(#keyCondition$velocityCount)")'),
+                                        qref('$condition.put(\
+"expression", "$condition.expression AND attribute_exists(#keyCondition$velocityCount)")'),
+                                    ),
+                                    qref('$condition.expressionNames.put("#keyCondition$velocityCount", "$entry.key")')
+                                ])
+                            ]),
+                            set(ref('condition'), obj({
+                                expression: str("attribute_exists(#id)"),
+                                expressionNames: obj({
+                                    "#id": str("id")
+                                }),
+                                expressionValues: obj({}),
+                            }))
+                        )
                     ),
                     comment('Automatically set the updatedAt timestamp.'),
-                    qref('$context.args.input.put("updatedAt", $util.time.nowISO8601())'),
+                    qref('$context.args.input.put("updatedAt", $util.defaultIfNull($ctx.args.input.updatedAt, $util.time.nowISO8601()))'),
                     qref(`$context.args.input.put("__typename", "${type}")`),
                     comment('Update condition if type is @versioned'),
                     iff(
@@ -344,10 +422,17 @@ export class ResourceFactory {
                         ])
                     ),
                     DynamoDBMappingTemplate.updateItem({
-                        key: obj({
-                            id: obj({ S: str('$context.args.input.id') })
-                        }),
-                        condition: ref('util.toJson($condition)')
+                        key: ifElse(
+                            ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                            raw(`$util.toJson(\$${ResourceConstants.SNIPPETS.ModelObjectKey})`),
+                            obj({
+                                id: obj({ S: str('$context.args.input.id') })
+                            }),
+                            true
+                        ),
+                        condition: ref('util.toJson($condition)'),
+                        objectKeyVariable: ResourceConstants.SNIPPETS.ModelObjectKey,
+                        nameOverrideMap: ResourceConstants.SNIPPETS.DynamoDBNameOverrideMap
                     })
                 ])
             ),
@@ -370,9 +455,14 @@ export class ResourceFactory {
             TypeName: queryTypeName,
             RequestMappingTemplate: print(
                 DynamoDBMappingTemplate.getItem({
-                    key: obj({
-                        id: ref('util.dynamodb.toDynamoDBJson($ctx.args.id)')
-                    })
+                    key: ifElse(
+                        ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                        raw(`$util.toJson(\$${ResourceConstants.SNIPPETS.ModelObjectKey})`),
+                        obj({
+                            id: ref('util.dynamodb.toDynamoDBJson($ctx.args.id)')
+                        }),
+                        true
+                    )
                 })
             ),
             ResponseMappingTemplate: print(
@@ -449,7 +539,7 @@ export class ResourceFactory {
     public makeListResolver(type: string, nameOverride?: string, queryTypeName: string = 'Query') {
         const fieldName = nameOverride ? nameOverride : graphqlName('list' + plurality(toUpper(type)))
         const defaultPageLimit = 10
-
+        const requestVariable = 'ListRequest';
         return new AppSync.Resolver({
             ApiId: Fn.GetAtt(ResourceConstants.RESOURCES.GraphQLAPILogicalID, 'ApiId'),
             DataSourceName: Fn.GetAtt(ModelResourceIDs.ModelTableDataSourceID(type), 'Name'),
@@ -458,19 +548,42 @@ export class ResourceFactory {
             RequestMappingTemplate: print(
                 compoundExpression([
                     set(ref('limit'), ref(`util.defaultIfNull($context.args.limit, ${defaultPageLimit})`)),
-                    DynamoDBMappingTemplate.listItem({
-                        filter: ifElse(
-                            ref('context.args.filter'),
-                            ref('util.transform.toDynamoDBFilterExpression($ctx.args.filter)'),
-                            nul()
-                        ),
-                        limit: ref('limit'),
-                        nextToken: ifElse(
-                            ref('context.args.nextToken'),
-                            str('$context.args.nextToken'),
-                            nul()
+                    set(
+                        ref(requestVariable),
+                        obj({
+                            version: str('2017-02-28'),
+                            limit: ref('limit')
+                        })
+                    ),
+                    iff(
+                        ref('context.args.nextToken'),
+                        set(
+                            ref(`${requestVariable}.nextToken`),
+                            str('$context.args.nextToken')
                         )
-                    })
+                    ),
+                    iff(
+                        ref('context.args.filter'),
+                        set(
+                            ref(`${requestVariable}.filter`),
+                            ref('util.parseJson("$util.transform.toDynamoDBFilterExpression($ctx.args.filter)")')
+                        ),
+                    ),
+                    ifElse(
+                        raw(`!$util.isNull($${ResourceConstants.SNIPPETS.ModelQueryExpression})
+                        && !$util.isNullOrEmpty($${ResourceConstants.SNIPPETS.ModelQueryExpression}.expression)`),
+                        compoundExpression([
+                            qref(`$${requestVariable}.put("operation", "Query")`),
+                            qref(`$${requestVariable}.put("query", $${ResourceConstants.SNIPPETS.ModelQueryExpression})`),
+                            ifElse(
+                                raw(`!$util.isNull($ctx.args.sortDirection) && $ctx.args.sortDirection == "DESC"`),
+                                set(ref(`${requestVariable}.scanIndexForward`), bool(false)),
+                                set(ref(`${requestVariable}.scanIndexForward`), bool(true)),
+                            )
+                        ]),
+                        qref(`$${requestVariable}.put("operation", "Scan")`)
+                    ),
+                    raw(`$util.toJson($${requestVariable})`)
                 ])
             ),
             ResponseMappingTemplate: print(
@@ -497,15 +610,43 @@ export class ResourceFactory {
                         ref(ResourceConstants.SNIPPETS.AuthCondition),
                         compoundExpression([
                             set(ref('condition'), ref(ResourceConstants.SNIPPETS.AuthCondition)),
-                            qref('$condition.put("expression", "$condition.expression AND attribute_exists(#id)")'),
-                            qref('$condition.expressionNames.put("#id", "id")')
+                            ifElse(
+                                ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                                forEach(ref('entry'), ref(`${ResourceConstants.SNIPPETS.ModelObjectKey}.entrySet()`),
+                                [
+                                    qref('$condition.put("expression", "$condition.expression AND attribute_exists(#keyCondition$velocityCount)")'),
+                                    qref('$condition.expressionNames.put("#keyCondition$velocityCount", "$entry.key")')
+                                ]),
+                                compoundExpression([
+                                    qref('$condition.put("expression", "$condition.expression AND attribute_exists(#id)")'),
+                                    qref('$condition.expressionNames.put("#id", "id")')
+                                ])
+                            )
                         ]),
-                        set(ref('condition'), obj({
-                            expression: str("attribute_exists(#id)"),
-                            expressionNames: obj({
-                                "#id": str("id")
-                            })
-                        }))
+                        ifElse(
+                            ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                            compoundExpression([
+                                set(ref('condition'), obj({
+                                    expression: str(""),
+                                    expressionNames: obj({}),
+                                })),
+                                forEach(ref('entry'), ref(`${ResourceConstants.SNIPPETS.ModelObjectKey}.entrySet()`), [
+                                    ifElse(
+                                        raw('$velocityCount == 1'),
+                                        qref('$condition.put("expression", "attribute_exists(#keyCondition$velocityCount)")'),
+                                        qref('$condition.put(\
+"expression", "$condition.expression AND attribute_exists(#keyCondition$velocityCount)")'),
+                                    ),
+                                    qref('$condition.expressionNames.put("#keyCondition$velocityCount", "$entry.key")')
+                                ])
+                            ]),
+                            set(ref('condition'), obj({
+                                expression: str("attribute_exists(#id)"),
+                                expressionNames: obj({
+                                    "#id": str("id")
+                                })
+                            }))
+                        )
                     ),
                     iff(
                         ref(ResourceConstants.SNIPPETS.VersionedCondition),
@@ -519,9 +660,14 @@ export class ResourceFactory {
                         ])
                     ),
                     DynamoDBMappingTemplate.deleteItem({
-                        key: obj({
-                            id: ref('util.dynamodb.toDynamoDBJson($ctx.args.input.id)')
-                        }),
+                        key: ifElse(
+                            ref(ResourceConstants.SNIPPETS.ModelObjectKey),
+                            raw(`$util.toJson(\$${ResourceConstants.SNIPPETS.ModelObjectKey})`),
+                            obj({
+                                id: ref('util.dynamodb.toDynamoDBJson($ctx.args.input.id)')
+                            }),
+                            true
+                        ),
                         condition: ref('util.toJson($condition)')
                     })
                 ])

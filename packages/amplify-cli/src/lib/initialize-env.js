@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const sequential = require('promise-sequential');
 const ora = require('ora');
+const { readJsonFile } = require('../extensions/amplify-helpers/read-json-file');
 
 const spinner = ora('');
 
@@ -12,14 +13,14 @@ async function initializeEnv(context, currentAmplifyMeta) {
     const { projectPath } = context.exeInfo.localEnvInfo;
     const providerInfoFilePath = context.amplify.pathManager.getProviderInfoFilePath(projectPath);
     const amplifyMeta = {};
-    amplifyMeta.providers = JSON.parse(fs.readFileSync(providerInfoFilePath))[currentEnv];
+    amplifyMeta.providers = readJsonFile(providerInfoFilePath)[currentEnv];
 
     if (!currentAmplifyMeta) {
       // Get current-cloud-backend's amplify-meta
       const currentAmplifyMetafilePath = context.amplify.pathManager.getCurentAmplifyMetaFilePath();
 
       if (fs.existsSync(currentAmplifyMetafilePath)) {
-        currentAmplifyMeta = JSON.parse(fs.readFileSync(currentAmplifyMetafilePath));
+        currentAmplifyMeta = readJsonFile(currentAmplifyMetafilePath);
       }
     }
 
@@ -69,10 +70,16 @@ async function initializeEnv(context, currentAmplifyMeta) {
       context.exeInfo.forcePush = await context.amplify.confirmPrompt.run('Do you want to push your resources to the cloud for your environment?');
     }
     if (context.exeInfo.forcePush) {
-      context.exeInfo.projectConfig.providers.forEach((provider) => {
+      for (let i = 0; i < context.exeInfo.projectConfig.providers.length; i += 1) {
+        const provider = context.exeInfo.projectConfig.providers[i];
         const providerModule = require(providerPlugins[provider]);
-        providerPushTasks.push(() => providerModule.pushResources(context));
-      });
+        const resourceDefiniton = await context.amplify.getResourceStatus(
+          undefined,
+          undefined,
+          provider,
+        );
+        providerPushTasks.push(() => providerModule.pushResources(context, resourceDefiniton));
+      }
       await sequential(providerPushTasks);
     }
     // Generate AWS exports/configurtion file
@@ -89,7 +96,7 @@ function populateAmplifyMeta(context, amplifyMeta) {
 
   const backendConfigFilePath = context.amplify.pathManager.getBackendConfigFilePath(projectPath);
 
-  const backendResourceInfo = JSON.parse(fs.readFileSync(backendConfigFilePath));
+  const backendResourceInfo = readJsonFile(backendConfigFilePath);
 
   Object.assign(amplifyMeta, backendResourceInfo);
 

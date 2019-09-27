@@ -1,7 +1,7 @@
 const fs = require('fs-extra');
 const inquirer = require('inquirer');
 const path = require('path');
-const opn = require('opn');
+const open = require('open');
 const chalk = require('chalk');
 const configManager = require('./configuration-manager');
 const fileUPloader = require('./helpers/file-uploader');
@@ -23,10 +23,10 @@ const Environments = [
 
 async function enable(context) {
   let templateFilePath = path.join(__dirname, templateFileName);
-  context.exeInfo.template = JSON.parse(fs.readFileSync(templateFilePath));
+  context.exeInfo.template = context.amplify.readJsonFile(templateFilePath);
 
   let parametersFilePath = path.join(__dirname, parametersFileName);
-  context.exeInfo.parameters = JSON.parse(fs.readFileSync(parametersFilePath));
+  context.exeInfo.parameters = context.amplify.readJsonFile(parametersFilePath);
 
   // will take this out once cloudformation invoke and wait are separated;
   await checkCDN(context);
@@ -96,8 +96,8 @@ async function configure(context) {
   const parametersFilePath = path.join(serviceDirPath, parametersFileName);
 
   if (fs.existsSync(templateFilePath)) {
-    context.exeInfo.template = JSON.parse(fs.readFileSync(templateFilePath));
-    context.exeInfo.parameters = JSON.parse(fs.readFileSync(parametersFilePath));
+    context.exeInfo.template = context.amplify.readJsonFile(templateFilePath);
+    context.exeInfo.parameters = context.amplify.readJsonFile(parametersFilePath);
 
     await configManager.configure(context);
 
@@ -117,8 +117,8 @@ function publish(context, args) {
   const serviceDirPath = path.join(projectBackendDirPath, constants.CategoryName, serviceName);
   const templateFilePath = path.join(serviceDirPath, templateFileName);
   const parametersFilePath = path.join(serviceDirPath, parametersFileName);
-  context.exeInfo.template = JSON.parse(fs.readFileSync(templateFilePath));
-  context.exeInfo.parameters = JSON.parse(fs.readFileSync(parametersFilePath));
+  context.exeInfo.template = context.amplify.readJsonFile(templateFilePath);
+  context.exeInfo.parameters = context.amplify.readJsonFile(parametersFilePath);
   return fileUPloader.run(context, args.distributionDirPath)
     .then(() => cloudFrontManager.invalidateCloudFront(context))
     .then(() => {
@@ -130,7 +130,7 @@ function publish(context, args) {
         const { WebsiteURL } = context.exeInfo.serviceMeta.output;
         context.print.info('Your app is published successfully.');
         context.print.info(chalk.green(WebsiteURL));
-        opn(WebsiteURL, { wait: false });
+        open(WebsiteURL, { wait: false });
       }
     })
     .catch((e) => {
@@ -145,7 +145,7 @@ function console(context) {
   const consoleUrl =
         `https://s3.console.aws.amazon.com/s3/buckets/${bucket}/?region=${region}&tab=overview`;
   context.print.info(chalk.green(consoleUrl));
-  opn(consoleUrl, { wait: false });
+  open(consoleUrl, { wait: false });
 }
 
 async function migrate(context) {
@@ -154,17 +154,17 @@ async function migrate(context) {
   if (fs.existsSync(serviceDirPath)) {
     const templateFilePath = path.join(serviceDirPath, templateFileName);
     if (fs.existsSync(templateFilePath)) {
-      let template = JSON.parse(fs.readFileSync(templateFilePath));
+      let template = context.amplify.readJsonFile(templateFilePath);
       let parameters;
       const parametersFilePath = path.join(serviceDirPath, parametersFileName);
       if (fs.existsSync(parametersFilePath)) {
-        parameters = JSON.parse(fs.readFileSync(parametersFilePath));
+        parameters = context.amplify.readJsonFile(parametersFilePath);
       }
 
       const migrationInfo = extractMigrationInfo(template);
 
-      template = migrateTemplate(template, migrationInfo);
-      parameters = migrateParameters(parameters, migrationInfo);
+      template = migrateTemplate(context, template, migrationInfo);
+      parameters = migrateParameters(context, parameters, migrationInfo);
 
       let jsonString = JSON.stringify(template, null, 4);
       fs.writeFileSync(templateFilePath, jsonString, 'utf8');
@@ -185,9 +185,9 @@ function extractMigrationInfo(template) {
   return migrationInfo;
 }
 
-function migrateTemplate(template, migrationInfo) {
+function migrateTemplate(context, template, migrationInfo) {
   const templateFilePath = path.join(__dirname, templateFileName);
-  const templateNewVersion = JSON.parse(fs.readFileSync(templateFilePath));
+  const templateNewVersion = context.amplify.readJsonFile(templateFilePath);
 
   template.Parameters = template.Parameters || {};
   Object.assign(template.Parameters, templateNewVersion.Parameters);
@@ -203,11 +203,11 @@ function migrateTemplate(template, migrationInfo) {
   return template;
 }
 
-function migrateParameters(parameters, migrationInfo) {
+function migrateParameters(context, parameters, migrationInfo) {
   parameters = parameters || {};
   if (migrationInfo.BucketName) {
     const parametersFilePath = path.join(__dirname, parametersFileName);
-    const parametersNewVersion = JSON.parse(fs.readFileSync(parametersFilePath));
+    const parametersNewVersion = context.amplify.readJsonFile(parametersFilePath);
     parametersNewVersion.bucketName = migrationInfo.BucketName;
     Object.assign(parameters, parametersNewVersion);
   }

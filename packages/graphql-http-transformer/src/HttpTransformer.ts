@@ -1,4 +1,4 @@
-import { Transformer, TransformerContext, TransformerContractError } from 'graphql-transformer-core'
+import { Transformer, TransformerContext, TransformerContractError, gql } from 'graphql-transformer-core'
 import {
     DirectiveNode, ObjectTypeDefinitionNode,
     Kind, FieldDefinitionNode, InterfaceTypeDefinitionNode,
@@ -20,9 +20,15 @@ const HTTP_STACK_NAME = 'HttpStack'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
+export interface HttpHeader {
+    key: String,
+    value: String
+}
+
 interface HttpDirectiveArgs {
     method?: HttpMethod,
     url: String,
+    headers: HttpHeader[]
 }
 
 /**
@@ -35,15 +41,16 @@ export class HttpTransformer extends Transformer {
 
     resources: ResourceFactory
 
-    static urlRegex = /(http(s)?:\/\/)|www\.|(\/.*)/g
+    static urlRegex = /(http(s)?:\/\/)|(\/.*)/g
 
     constructor() {
         super(
             'HttpTransformer',
-            `
+            gql`
             directive @http(
                 method: HttpMethod = GET,
-                url: String!
+                url: String!,
+                headers: [HttpHeader] = []
             ) on FIELD_DEFINITION
             enum HttpMethod {
                 GET
@@ -51,6 +58,10 @@ export class HttpTransformer extends Transformer {
                 PUT
                 DELETE
                 PATCH
+            }
+            input HttpHeader {
+                key: String,
+                value: String
             }
             `
         )
@@ -81,12 +92,12 @@ export class HttpTransformer extends Transformer {
                 throw new TransformerContractError(`@http directive at location ${value.loc.start} ` +
                     `requires a url parameter that begins with http:// or https://.`)
             }
-            // extract just the base url, without "www" or path information
+            // extract just the base url with protocol
             const baseURL = url.replace(HttpTransformer.urlRegex, '$1')
             const dataSourceID = HttpResourceIDs.HttpDataSourceID(baseURL)
             // only create one DataSource per base URL
             if (!ctx.getResource(dataSourceID)) {
-                ctx.addToStackMapping(HTTP_STACK_NAME, `^${dataSourceID}$`)
+                ctx.mapResourceToStack(HTTP_STACK_NAME, dataSourceID)
                 ctx.setResource(
                     dataSourceID,
                     this.resources.makeHttpDataSource(baseURL)
@@ -104,9 +115,9 @@ export class HttpTransformer extends Transformer {
         directive: DirectiveNode,
         ctx: TransformerContext
     ): void => {
-        ctx.addToStackMapping(
+        ctx.mapResourceToStack(
             HTTP_STACK_NAME,
-            `^${ResolverResourceIDs.ResolverResourceID(parent.name.value, field.name.value)}$`
+            ResolverResourceIDs.ResolverResourceID(parent.name.value, field.name.value)
         )
         const url: string = getDirectiveArgument(directive)("url")
         const baseURL: string = url.replace(HttpTransformer.urlRegex, '$1')
@@ -143,6 +154,12 @@ export class HttpTransformer extends Transformer {
         let method: HttpMethod = getDirectiveArgument(directive)("method")
         if (!method) {
             method = 'GET'
+        }
+
+        let headers : HttpHeader[] = getDirectiveArgument(directive)("headers")
+
+        if (!headers || !Array.isArray(headers)) {
+            headers = [];
         }
 
         if (queryBodyArgsArray.length > 0) {
@@ -185,6 +202,7 @@ export class HttpTransformer extends Transformer {
                         path,
                         parent.name.value,
                         field.name.value,
+                        headers
                     )
                     ctx.setResource(getResourceID, getResolver)
                 }
@@ -199,7 +217,8 @@ export class HttpTransformer extends Transformer {
                         field.name.value,
                         queryBodyArgsArray
                             .filter(a => a.type.kind === Kind.NON_NULL_TYPE)
-                            .map(a => a.name.value)
+                            .map(a => a.name.value),
+                        headers
                     )
                     ctx.setResource(postResourceID, postResolver)
                 }
@@ -214,7 +233,8 @@ export class HttpTransformer extends Transformer {
                         field.name.value,
                         queryBodyArgsArray
                             .filter(a => a.type.kind === Kind.NON_NULL_TYPE)
-                            .map(a => a.name.value)
+                            .map(a => a.name.value),
+                        headers
                     )
                     ctx.setResource(putResourceID, putResolver)
                 }
@@ -222,7 +242,7 @@ export class HttpTransformer extends Transformer {
             case 'DELETE':
                 const deleteResourceID = ResolverResourceIDs.ResolverResourceID(parent.name.value, field.name.value)
                 if (!ctx.getResource(deleteResourceID)) {
-                    const deleteResolver = this.resources.makeDeleteResolver(baseURL, path, parent.name.value, field.name.value)
+                    const deleteResolver = this.resources.makeDeleteResolver(baseURL, path, parent.name.value, field.name.value, headers)
                     ctx.setResource(deleteResourceID, deleteResolver)
                 }
                 break;
@@ -236,7 +256,8 @@ export class HttpTransformer extends Transformer {
                         field.name.value,
                         queryBodyArgsArray
                             .filter(a => a.type.kind === Kind.NON_NULL_TYPE)
-                            .map(a => a.name.value)
+                            .map(a => a.name.value),
+                        headers
                     )
                     ctx.setResource(patchResourceID, patchResolver)
                 }

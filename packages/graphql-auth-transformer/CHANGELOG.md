@@ -3,6 +3,196 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [5.0.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@5.0.0) (2019-08-30)
+
+
+### Bug Fixes
+
+* [#2013](https://github.com/aws-amplify/amplify-cli/issues/2013) - Dynamic group auth when groups field is null ([#2097](https://github.com/aws-amplify/amplify-cli/issues/2097)) ([4ad3d5c](https://github.com/aws-amplify/amplify-cli/commit/4ad3d5c))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+* Adding Auth on Subscriptions (#2068) ([81c630d](https://github.com/aws-amplify/amplify-cli/commit/81c630d)), closes [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068)
+
+
+### BREAKING CHANGES
+
+* If an owner is used in the auth directive it will either be a requirement if it's
+the only rule or an optional input if used with other rules
+* If an owner is included in the auth directive it will either be a requirement if
+it's the only rule or an optional input if used with other rules
+* the subscription operations will require an argument if owner is the only auth rule
+* Subscriptions will require an argument if an owner is only rule set - If owner &
+group rules are owner will be an optional arg
+
+
+
+
+
+# [4.0.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@4.0.0) (2019-08-28)
+
+
+### Bug Fixes
+
+* [#2013](https://github.com/aws-amplify/amplify-cli/issues/2013) - Dynamic group auth when groups field is null ([#2097](https://github.com/aws-amplify/amplify-cli/issues/2097)) ([4ad3d5c](https://github.com/aws-amplify/amplify-cli/commit/4ad3d5c))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+* Adding Auth on Subscriptions (#2068) ([81c630d](https://github.com/aws-amplify/amplify-cli/commit/81c630d)), closes [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#1766](https://github.com/aws-amplify/amplify-cli/issues/1766) [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068) [#2068](https://github.com/aws-amplify/amplify-cli/issues/2068)
+
+
+### BREAKING CHANGES
+
+* If an owner is used in the auth directive it will either be a requirement if it's
+the only rule or an optional input if used with other rules
+* If an owner is included in the auth directive it will either be a requirement if
+it's the only rule or an optional input if used with other rules
+* the subscription operations will require an argument if owner is the only auth rule
+* Subscriptions will require an argument if an owner is only rule set - If owner &
+group rules are owner will be an optional arg
+
+
+
+
+
+# [3.11.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@3.11.0) (2019-08-13)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [3.10.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@3.10.0) (2019-08-07)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [3.9.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@3.9.0) (2019-08-02)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [3.8.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.5...graphql-auth-transformer@3.8.0) (2019-07-31)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+## [3.7.5](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.4...graphql-auth-transformer@3.7.5) (2019-07-24)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.7.4](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.2...graphql-auth-transformer@3.7.4) (2019-06-30)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.7.2](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.1...graphql-auth-transformer@3.7.2) (2019-06-26)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.7.1](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.7.0...graphql-auth-transformer@3.7.1) (2019-06-12)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+# [3.7.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.6.4...graphql-auth-transformer@3.7.0) (2019-05-29)
+
+
+### Features
+
+* feature/[@key](https://github.com/key) ([#1463](https://github.com/aws-amplify/amplify-cli/issues/1463)) ([00ed819](https://github.com/aws-amplify/amplify-cli/commit/00ed819))
+
+
+
+
+
+## [3.6.4](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.6.3...graphql-auth-transformer@3.6.4) (2019-05-21)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.6.3](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.6.2...graphql-auth-transformer@3.6.3) (2019-05-17)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.6.2](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.6.0...graphql-auth-transformer@3.6.2) (2019-05-07)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+## [3.6.1](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.6.0...graphql-auth-transformer@3.6.1) (2019-05-06)
+
+**Note:** Version bump only for package graphql-auth-transformer
+
+
+
+
+
+# [3.6.0](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.5.1...graphql-auth-transformer@3.6.0) (2019-04-16)
+
+
+### Features
+
+* **field-level-auth:** Add field level auth support via the [@auth](https://github.com/auth) directive ([#1262](https://github.com/aws-amplify/amplify-cli/issues/1262)) ([3b1c600](https://github.com/aws-amplify/amplify-cli/commit/3b1c600)), closes [#1043](https://github.com/aws-amplify/amplify-cli/issues/1043)
+
+
+
+
+
 ## [3.5.1](https://github.com/aws-amplify/amplify-cli/compare/graphql-auth-transformer@3.4.0...graphql-auth-transformer@3.5.1) (2019-04-09)
 
 **Note:** Version bump only for package graphql-auth-transformer

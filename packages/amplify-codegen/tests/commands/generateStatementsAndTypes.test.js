@@ -3,12 +3,11 @@ const generateStatements = require('../../src/commands/statements');
 const generateTypes = require('../../src/commands/types');
 const generateStatementsAndTypes = require('../../src/commands/generateStatementsAndType');
 const { AmplifyCodeGenNoAppSyncAPIAvailableError } = require('../../src/errors');
-const constants = require('../../src/constants');
 const path = require('path');
 
 const {
-  downloadIntrospectionSchemaWithProgress,
-  isAppSyncApiPendingPush,
+  ensureIntrospectionSchema,
+  getAppSyncAPIDetails,
 } = require('../../src/utils');
 
 const MOCK_CONTEXT = {
@@ -40,11 +39,15 @@ const MOCK_PROJECT = {
   amplifyExtension: {
     generatedFileName: MOCK_GENERATED_FILE_NAME,
     codeGenTarget: MOCK_TARGET,
-    graphQLApiId: MOCK_API_ID,
     docsFilePath: MOCK_STATEMENTS_PATH,
     region: MOCK_REGION,
   },
 };
+const MOCK_APIS = [
+  {
+    id: MOCK_API_ID,
+  },
+];
 
 describe('command - generateStatementsAndTypes', () => {
   beforeEach(() => {
@@ -54,6 +57,7 @@ describe('command - generateStatementsAndTypes', () => {
       getProjects: jest.fn().mockReturnValue([MOCK_PROJECT]),
     });
     MOCK_CONTEXT.amplify.getEnvInfo.mockReturnValue({ projectPath: MOCK_PROJECT_ROOT });
+    getAppSyncAPIDetails.mockReturnValue(MOCK_APIS);
   });
 
   it('should generate statements and types', async () => {
@@ -67,11 +71,12 @@ describe('command - generateStatementsAndTypes', () => {
   it('should download the schema if forceDownload flag is passed', async () => {
     const forceDownload = true;
     await generateStatementsAndTypes(MOCK_CONTEXT, forceDownload);
-    expect(downloadIntrospectionSchemaWithProgress).toHaveBeenCalledWith(
+    expect(ensureIntrospectionSchema).toHaveBeenCalledWith(
       MOCK_CONTEXT,
-      MOCK_API_ID,
       path.join(MOCK_PROJECT_ROOT, MOCK_SCHEMA),
+      MOCK_APIS[0],
       MOCK_REGION,
+      forceDownload,
     );
   });
 
@@ -82,11 +87,5 @@ describe('command - generateStatementsAndTypes', () => {
     await expect(generateStatementsAndTypes(MOCK_CONTEXT, false)).rejects.toBeInstanceOf(
       AmplifyCodeGenNoAppSyncAPIAvailableError,
     );
-  });
-
-  it('should show a warning if the project has local change which is pending push', async () => {
-    isAppSyncApiPendingPush.mockReturnValue(true);
-    await generateStatementsAndTypes(MOCK_CONTEXT, false);
-    expect(MOCK_CONTEXT.print.info).toHaveBeenCalledWith(constants.MSG_CODEGEN_PENDING_API_PUSH);
   });
 });

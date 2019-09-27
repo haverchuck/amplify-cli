@@ -1,0 +1,33 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "Stack For Amplify Console",
+    "Resources": {
+        "AmplifyApp": {
+            "Type" : "AWS::Amplify::App", 
+            "Properties": {
+            }
+        }
+    },
+    "Outputs" : {
+        "Region": {
+            "Description": "Amplify App Region", 
+            "Value": {"Ref": "AWS::Region"},
+            "Export": {
+                "Name" : { "Fn::Sub" : "${AWS::StackName}-Region"}
+            }
+        },
+        "StackId": {
+            "Description": "Amplify app stack id", 
+            "Value": {"Ref": "AWS::StackId"},
+            "Export": {
+                "Name" : { "Fn::Sub" : "${AWS::StackName}-StackId"}
+            }
+        },
+        "AppId": {
+            "Value": {"Fn::GetAtt": ["AmplifyApp", "AppId"]}
+        }, 
+        "DefaultDomain": {
+            "Value": {"Fn::GetAtt": ["AmplifyApp", "DefaultDomain"]}
+        }
+    }
+}

@@ -15,6 +15,9 @@ export class ResourceConstants {
         ElasticsearchStreamingLambdaFunctionLogicalID: 'ElasticSearchStreamingLambdaFunction',
         ElasticsearchDataSourceLogicalID: 'ElasticSearchDataSource',
 
+        // Local. Try not to collide with model data sources.
+        NoneDataSource: 'NoneDataSource',
+
         // Auth
         AuthCognitoUserPoolLogicalID: 'AuthCognitoUserPool',
         AuthCognitoUserPoolNativeClientLogicalID: 'AuthCognitoUserPoolNativeClient',
@@ -36,9 +39,9 @@ export class ResourceConstants {
         DynamoDBModelTableReadIOPS: 'DynamoDBModelTableReadIOPS',
         DynamoDBModelTableWriteIOPS: 'DynamoDBModelTableWriteIOPS',
         DynamoDBEnablePointInTimeRecovery: 'DynamoDBEnablePointInTimeRecovery',
+        DynamoDBEnableServerSideEncryption: 'DynamoDBEnableServerSideEncryption',
 
         // Elasticsearch
-        ElasticsearchDomainName: 'ElasticSearchDomainName',
         ElasticsearchAccessIAMRoleName: 'ElasticSearchAccessIAMRoleName',
         ElasticsearchDebugStreamingLambda: 'ElasticSearchDebugStreamingLambda',
         ElasticsearchStreamingIAMRoleName: 'ElasticSearchStreamingIAMRoleName',
@@ -60,6 +63,7 @@ export class ResourceConstants {
         // DynamoDB
         ShouldUsePayPerRequestBilling: 'ShouldUsePayPerRequestBilling',
         ShouldUsePointInTimeRecovery: 'ShouldUsePointInTimeRecovery',
+        ShouldUseServerSideEncryption: 'ShouldUseServerSideEncryption',
 
         // Auth
         ShouldCreateAPIKey: 'ShouldCreateAPIKey',
@@ -88,6 +92,10 @@ export class ResourceConstants {
     public static readonly SNIPPETS = {
         AuthCondition: "authCondition",
         VersionedCondition: "versionedCondition",
+        ModelObjectKey: "modelObjectKey",
+        DynamoDBNameOverrideMap: "dynamodbNameOverrideMap",
+        ModelQueryExpression: "modelQueryExpression",
+        ModelQueryIndex: "modelQueryIndex",
         IsDynamicGroupAuthorizedVariable: "isDynamicGroupAuthorized",
         IsLocalDynamicGroupAuthorizedVariable: "isLocalDynamicGroupAuthorized",
         IsStaticGroupAuthorizedVariable: "isStaticGroupAuthorized",

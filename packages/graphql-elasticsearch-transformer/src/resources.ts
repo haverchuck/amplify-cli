@@ -7,7 +7,7 @@ import {
     ElasticsearchMappingTemplate,
     print, str, ref, obj, set, iff, list, raw,
     forEach, compoundExpression, qref, toJson, ifElse,
-    int
+    int, Expression
 } from 'graphql-mapping-template'
 import { toUpper, plurality, graphqlName, ResourceConstants, ModelResourceIDs } from 'graphql-transformer-common'
 
@@ -44,13 +44,6 @@ export class ResourceFactory {
             [ResourceConstants.PARAMETERS.ElasticsearchInstanceCount]: new NumberParameter({
                 Description: 'The number of instances to launch into the Elasticsearch domain.',
                 Default: 1
-            }),
-            [ResourceConstants.PARAMETERS.ElasticsearchDomainName]: new StringParameter({
-                Description: 'The name of the Elasticsearch domain.',
-                Default: 'appsync-elasticsearch-domain',
-                AllowedPattern: '^[a-z][a-z0-9-]*$',
-                MinLength: 1,
-                MaxLength: 28
             }),
             [ResourceConstants.PARAMETERS.ElasticsearchInstanceType]: new StringParameter({
                 Description: 'The type of instance to launch into the Elasticsearch domain.',
@@ -389,8 +382,8 @@ export class ResourceFactory {
     /**
      * Create the Elasticsearch search resolver.
      */
-    public makeSearchResolver(type: string, nameOverride?: string, queryTypeName: string = 'Query') {
-        const fieldName = nameOverride ? nameOverride : graphqlName('search' + plurality(toUpper(type)))
+    public makeSearchResolver(type: string, nonKeywordFields: Expression[], nameOverride?: string, queryTypeName: string = 'Query') {
+        const fieldName = nameOverride ? nameOverride : graphqlName('search' + plurality(toUpper(type)));
         return new AppSync.Resolver({
             ApiId: Fn.GetAtt(ResourceConstants.RESOURCES.GraphQLAPILogicalID, 'ApiId'),
             DataSourceName: Fn.GetAtt(ResourceConstants.RESOURCES.ElasticsearchDataSourceLogicalID, 'Name'),
@@ -399,6 +392,7 @@ export class ResourceFactory {
             RequestMappingTemplate: print(
                 compoundExpression([
                     set(ref('indexPath'), str(`/${type.toLowerCase()}/doc/_search`)),
+                    set(ref('nonKeywordFields'), list(nonKeywordFields)),
                     ElasticsearchMappingTemplate.searchItem({
                         path: str('$indexPath'),
                         size: ifElse(
@@ -406,11 +400,7 @@ export class ResourceFactory {
                             ref('context.args.limit'),
                             int(10),
                             true),
-                        from: ifElse(
-                            ref('context.args.nextToken'),
-                            ref('context.args.nextToken'),
-                            int(0),
-                            true),
+                        search_after: list([str('$context.args.nextToken')]),
                         query: ifElse(
                             ref('context.args.filter'),
                             ref('util.transform.toElasticsearchQueryDSL($ctx.args.filter)'),
@@ -421,13 +411,12 @@ export class ResourceFactory {
                             ref('context.args.sort'),
                             list([
                                 iff(raw('!$util.isNullOrEmpty($context.args.sort.field) && !$util.isNullOrEmpty($context.args.sort.direction)'),
-                                    obj({
-                                        "$context.args.sort.field": obj({
-                                            "order": str('$context.args.sort.direction')
-                                        })
-                                    })
-                                ),
-                                str('_doc')
+                                raw(`{${'#if($nonKeywordFields.contains($context.args.sort.field))\
+                                    \n"$context.args.sort.field" #else "${context.args.sort.field}.keyword" #end'} : {
+                                        "order": "$context.args.sort.direction"
+                                    }
+                                }`)
+                                )
                             ]),
                             list([]))
                     })

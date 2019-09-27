@@ -7,9 +7,10 @@ const {
   updateBackendConfigAfterResourceAdd,
   updateBackendConfigDependsOn,
 } = require('./update-backend-config');
+const { readJsonFile } = require('./read-json-file');
 
 function updateAwsMetaFile(filePath, category, resourceName, attribute, value, timeStamp) {
-  const amplifyMeta = JSON.parse(fs.readFileSync(filePath));
+  const amplifyMeta = readJsonFile(filePath);
 
   if (!amplifyMeta[category]) {
     amplifyMeta[category] = {};
@@ -69,18 +70,23 @@ function moveBackendResourcesToCurrentCloudBackend(resources) {
   fs.copySync(backendConfigFilePath, backendConfigCloudFilePath, { overwrite: true });
 }
 
-function updateamplifyMetaAfterResourceAdd(category, resourceName, options) {
+function updateamplifyMetaAfterResourceAdd(category, resourceName, options = {}) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
+  if (options.dependsOn) {
+    checkForCyclicDependencies(category, resourceName, options.dependsOn);
+  }
+
   if (!amplifyMeta[category]) {
     amplifyMeta[category] = {};
   }
-  if (!amplifyMeta[category][resourceName]) {
-    amplifyMeta[category][resourceName] = {};
-    amplifyMeta[category][resourceName] = options;
-    const jsonString = JSON.stringify(amplifyMeta, null, '\t');
-    fs.writeFileSync(amplifyMetaFilePath, jsonString, 'utf8');
+  if (amplifyMeta[category][resourceName]) {
+    throw new Error(`${resourceName} is present in amplify-meta.json`);
   }
+  amplifyMeta[category][resourceName] = {};
+  amplifyMeta[category][resourceName] = options;
+  const jsonString = JSON.stringify(amplifyMeta, null, '\t');
+  fs.writeFileSync(amplifyMetaFilePath, jsonString, 'utf8');
 
   updateBackendConfigAfterResourceAdd(category, resourceName, options);
 }
@@ -88,7 +94,7 @@ function updateamplifyMetaAfterResourceAdd(category, resourceName, options) {
 function updateProvideramplifyMeta(providerName, options) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
 
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
   if (!amplifyMeta.providers) {
     amplifyMeta.providers = {};
     amplifyMeta.providers[providerName] = {};
@@ -109,7 +115,9 @@ function updateamplifyMetaAfterResourceUpdate(category, resourceName, attribute,
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
   // let amplifyCloudMetaFilePath = pathManager.getCurentAmplifyMetaFilePath();
   const currentTimestamp = new Date();
-
+  if (attribute === 'dependsOn') {
+    checkForCyclicDependencies(category, resourceName, value);
+  }
   updateAwsMetaFile(
     amplifyMetaFilePath,
     category,
@@ -118,14 +126,14 @@ function updateamplifyMetaAfterResourceUpdate(category, resourceName, attribute,
     value,
     currentTimestamp,
   );
-  if (attribute === 'dependsOn') {
-    updateBackendConfigDependsOn(category, resourceName, value);
+  if (['dependsOn', 'service'].includes(attribute)) {
+    updateBackendConfigDependsOn(category, resourceName, attribute, value);
   }
 }
 
 async function updateamplifyMetaAfterPush(resources) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
 
   const currentTimestamp = new Date();
   let sourceDir;
@@ -162,7 +170,7 @@ function getHashForResourceDir(dirPath) {
 
 function updateamplifyMetaAfterBuild(resource) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
   const currentTimestamp = new Date();
   /*eslint-disable */
   amplifyMeta[resource.category][resource.resourceName].lastBuildTimeStamp = currentTimestamp;
@@ -174,7 +182,7 @@ function updateamplifyMetaAfterBuild(resource) {
 
 function updateAmplifyMetaAfterPackage(resource, zipFilename) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
   const currentTimestamp = new Date();
   /*eslint-disable */
   amplifyMeta[resource.category][resource.resourceName].lastPackageTimeStamp = currentTimestamp;
@@ -188,7 +196,7 @@ function updateAmplifyMetaAfterPackage(resource, zipFilename) {
 
 function updateamplifyMetaAfterResourceDelete(category, resourceName) {
   const amplifyMetaFilePath = pathManager.getCurentAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
 
   const resourceDir = path.normalize(path.join(
     pathManager.getCurrentCloudBackendDirPath(),
@@ -203,6 +211,37 @@ function updateamplifyMetaAfterResourceDelete(category, resourceName) {
   const jsonString = JSON.stringify(amplifyMeta, null, '\t');
   fs.writeFileSync(amplifyMetaFilePath, jsonString, 'utf8');
   filesystem.remove(resourceDir);
+}
+
+function checkForCyclicDependencies(category, resourceName, dependsOn) {
+  const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
+  let cyclicDependency = false;
+
+  if (dependsOn) {
+    dependsOn.forEach((resource) => {
+      if (resource.category === category && resource.resourceName === resourceName) {
+        cyclicDependency = true;
+      }
+      if (amplifyMeta[resource.category] &&
+          amplifyMeta[resource.category][resource.resourceName]) {
+        const dependsOnResourceDependency =
+          amplifyMeta[resource.category][resource.resourceName].dependsOn;
+        if (dependsOnResourceDependency) {
+          dependsOnResourceDependency.forEach((dependsOnResource) => {
+            if (dependsOnResource.category === category &&
+              dependsOnResource.resourceName === resourceName) {
+              cyclicDependency = true;
+            }
+          });
+        }
+      }
+    });
+  }
+
+  if (cyclicDependency === true) {
+    throw new Error(`Cannot add ${resourceName} due to a cyclic dependency`);
+  }
 }
 
 

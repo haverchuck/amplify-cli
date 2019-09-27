@@ -6,11 +6,35 @@ const {
   updateBackendConfigAfterResourceRemove,
 } = require('./update-backend-config');
 const { removeResourceParameters } = require('./envResourceParams');
+const removeAmplifyHosting = require('amplify-hosting-service').remove;
+
+
+async function forceRemoveResource(context, category, name, dir) {
+  const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
+  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  if (!amplifyMeta[category] || Object.keys(amplifyMeta[category]).length === 0) {
+    context.print.error('No resources added for this category');
+    process.exit(1);
+    return;
+  }
+  if (!context || !category || !name || !dir) {
+    context.print.error('Unable to force removal of resource: missing parameters');
+    process.exit(1);
+    return;
+  }
+  context.print.info(`Removing resource ${name}...`);
+  let response;
+  try {
+    response = await deleteResourceFiles(context, category, name, dir, true);
+  } catch (e) {
+    context.print.error('Unable to force removal of resource: error deleting files');
+  }
+  return response;
+}
 
 function removeResource(context, category) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
   const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
-
   if (!amplifyMeta[category] || Object.keys(amplifyMeta[category]).length === 0) {
     context.print.error('No resources added for this category');
     process.exit(1);
@@ -29,6 +53,10 @@ function removeResource(context, category) {
   return inquirer.prompt(question)
     .then((answer) => {
       const resourceName = answer.resource;
+
+      if (category === 'hosting' && resourceName === 'AmplifyConsole') {
+        return removeAmplifyHosting(context);
+      }
       const resourceDir = path.normalize(path.join(
         pathManager.getBackendDirPath(),
         category,
@@ -37,37 +65,7 @@ function removeResource(context, category) {
       return context.amplify.confirmPrompt.run('Are you sure you want to delete the resource? This action deletes all files related to this resource from the backend directory.')
         .then(async (confirm) => {
           if (confirm) {
-            const { allResources } = await context.amplify.getResourceStatus();
-            allResources.forEach((resourceItem) => {
-              if (resourceItem.dependsOn) {
-                resourceItem.dependsOn.forEach((dependsOnItem) => {
-                  if (dependsOnItem.category === category &&
-                      dependsOnItem.resourceName === resourceName) {
-                    context.print.error('Resource cannot be removed because it has a dependency on another resource');
-                    context.print.error(`Dependency: ${resourceItem.service}:${resourceItem.resourceName}`);
-                    throw new Error('Resource cannot be removed because it has a dependency on another resource');
-                  }
-                });
-              }
-            });
-            const resourceValues = {
-              service: amplifyMeta[category][resourceName].service,
-              resourceName,
-            };
-            if (amplifyMeta[category][resourceName] !== undefined) {
-              delete amplifyMeta[category][resourceName];
-            }
-
-            const jsonString = JSON.stringify(amplifyMeta, null, '\t');
-            fs.writeFileSync(amplifyMetaFilePath, jsonString, 'utf8');
-
-            // Remove resource directory from backend/
-            context.filesystem.remove(resourceDir);
-            removeResourceParameters(context, category, resourceName);
-            updateBackendConfigAfterResourceRemove(category, resourceName);
-
-            context.print.success('Successfully removed resource');
-            return resourceValues;
+            return await deleteResourceFiles(context, category, resourceName, resourceDir);
           }
         });
     })
@@ -77,6 +75,45 @@ function removeResource(context, category) {
     });
 }
 
+const deleteResourceFiles = async (context, category, resourceName, resourceDir, force) => {
+  const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
+  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  if (!force) {
+    const { allResources } = await context.amplify.getResourceStatus();
+    allResources.forEach((resourceItem) => {
+      if (resourceItem.dependsOn) {
+        resourceItem.dependsOn.forEach((dependsOnItem) => {
+          if (dependsOnItem.category === category &&
+              dependsOnItem.resourceName === resourceName) {
+            context.print.error('Resource cannot be removed because it has a dependency on another resource');
+            context.print.error(`Dependency: ${resourceItem.service}:${resourceItem.resourceName}`);
+            throw new Error('Resource cannot be removed because it has a dependency on another resource');
+          }
+        });
+      }
+    });
+  }
+  const resourceValues = {
+    service: amplifyMeta[category][resourceName].service,
+    resourceName,
+  };
+  if (amplifyMeta[category][resourceName] !== undefined) {
+    delete amplifyMeta[category][resourceName];
+  }
+
+  const jsonString = JSON.stringify(amplifyMeta, null, '\t');
+  fs.writeFileSync(amplifyMetaFilePath, jsonString, 'utf8');
+
+  // Remove resource directory from backend/
+  context.filesystem.remove(resourceDir);
+  removeResourceParameters(context, category, resourceName);
+  updateBackendConfigAfterResourceRemove(category, resourceName);
+
+  context.print.success('Successfully removed resource');
+  return resourceValues;
+};
+
 module.exports = {
   removeResource,
+  forceRemoveResource,
 };

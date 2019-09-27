@@ -6,6 +6,7 @@ const { hashElement } = require('folder-hash');
 const pathManager = require('./path-manager');
 const { getEnvInfo } = require('./get-env-info');
 const _ = require('lodash');
+const { readJsonFile } = require('./read-json-file');
 
 async function isBackendDirModifiedSinceLastPush(resourceName, category, lastPushTimeStamp) {
   // Pushing the resource for the first time hence no lastPushTimeStamp
@@ -55,7 +56,30 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-function getAllResources(amplifyMeta, category, resourceName) {
+function filterResources(resources, filteredResources) {
+  if (!filteredResources) {
+    return resources;
+  }
+
+  resources = resources.filter((resource) => {
+    let common = false;
+    for (let i = 0; i < filteredResources.length; i += 1) {
+      if (filteredResources[i].category === resource.category
+        && filteredResources[i].resourceName === resource.resourceName) {
+        common = true;
+        break;
+      }
+    }
+    if (common === true) {
+      return true;
+    }
+    return false;
+  });
+
+  return resources;
+}
+
+function getAllResources(amplifyMeta, category, resourceName, filteredResources) {
   let resources = [];
 
   Object.keys((amplifyMeta)).forEach((categoryName) => {
@@ -66,6 +90,8 @@ function getAllResources(amplifyMeta, category, resourceName) {
       resources.push(amplifyMeta[categoryName][resource]);
     });
   });
+
+  resources = filterResources(resources, filteredResources);
 
   if (category !== undefined && resourceName !== undefined) {
     // Create only specified resource in the cloud
@@ -81,7 +107,13 @@ function getAllResources(amplifyMeta, category, resourceName) {
   return resources;
 }
 
-function getResourcesToBeCreated(amplifyMeta, currentamplifyMeta, category, resourceName) {
+function getResourcesToBeCreated(
+  amplifyMeta,
+  currentamplifyMeta,
+  category,
+  resourceName,
+  filteredResources,
+) {
   let resources = [];
 
   Object.keys((amplifyMeta)).forEach((categoryName) => {
@@ -90,13 +122,15 @@ function getResourcesToBeCreated(amplifyMeta, currentamplifyMeta, category, reso
       if ((!amplifyMeta[categoryName][resource].lastPushTimeStamp ||
           !currentamplifyMeta[categoryName] ||
           !currentamplifyMeta[categoryName][resource]) &&
-          categoryName !== 'providers') {
+          categoryName !== 'providers' && !amplifyMeta[categoryName][resource].status) {
         amplifyMeta[categoryName][resource].resourceName = resource;
         amplifyMeta[categoryName][resource].category = categoryName;
         resources.push(amplifyMeta[categoryName][resource]);
       }
     });
   });
+
+  resources = filterResources(resources, filteredResources);
 
   if (category !== undefined && resourceName !== undefined) {
     // Create only specified resource in the cloud
@@ -128,13 +162,20 @@ function getResourcesToBeCreated(amplifyMeta, currentamplifyMeta, category, reso
   return _.uniqWith(resources, _.isEqual);
 }
 
-function getResourcesToBeDeleted(amplifyMeta, currentamplifyMeta, category, resourceName) {
+function getResourcesToBeDeleted(
+  amplifyMeta,
+  currentamplifyMeta,
+  category,
+  resourceName,
+  filteredResources,
+) {
   let resources = [];
 
   Object.keys((currentamplifyMeta)).forEach((categoryName) => {
     const categoryItem = currentamplifyMeta[categoryName];
     Object.keys((categoryItem)).forEach((resource) => {
-      if (!amplifyMeta[categoryName] || !amplifyMeta[categoryName][resource]) {
+      if ((!amplifyMeta[categoryName] || !amplifyMeta[categoryName][resource])
+          && (!currentamplifyMeta[categoryName][resource].status)) {
         currentamplifyMeta[categoryName][resource].resourceName = resource;
         currentamplifyMeta[categoryName][resource].category = categoryName;
 
@@ -142,6 +183,8 @@ function getResourcesToBeDeleted(amplifyMeta, currentamplifyMeta, category, reso
       }
     });
   });
+
+  resources = filterResources(resources, filteredResources);
 
   if (category !== undefined && resourceName !== undefined) {
     // Deletes only specified resource in the cloud
@@ -158,7 +201,13 @@ function getResourcesToBeDeleted(amplifyMeta, currentamplifyMeta, category, reso
   return resources;
 }
 
-async function getResourcesToBeUpdated(amplifyMeta, currentamplifyMeta, category, resourceName) {
+async function getResourcesToBeUpdated(
+  amplifyMeta,
+  currentamplifyMeta,
+  category,
+  resourceName,
+  filteredResources,
+) {
   let resources = [];
 
   await asyncForEach(Object.keys((amplifyMeta)), async (categoryName) => {
@@ -166,7 +215,8 @@ async function getResourcesToBeUpdated(amplifyMeta, currentamplifyMeta, category
     await asyncForEach(Object.keys((categoryItem)), async (resource) => {
       if (currentamplifyMeta[categoryName]) {
         if (currentamplifyMeta[categoryName][resource] !== undefined &&
-            amplifyMeta[categoryName][resource] !== undefined) {
+            amplifyMeta[categoryName][resource] !== undefined
+            && !currentamplifyMeta[categoryName][resource].status) {
           const backendModified = await isBackendDirModifiedSinceLastPush(
             resource,
             categoryName,
@@ -182,6 +232,8 @@ async function getResourcesToBeUpdated(amplifyMeta, currentamplifyMeta, category
       }
     });
   });
+
+  resources = filterResources(resources, filteredResources);
 
   if (category !== undefined && resourceName !== undefined) {
     resources = resources.filter(resource => resource.category === category &&
@@ -202,36 +254,40 @@ async function asyncForEach(array, callback) {
 }
 
 
-async function getResourceStatus(category, resourceName, providerName) {
+async function getResourceStatus(category, resourceName, providerName, filteredResources) {
   const amplifyMetaFilePath = pathManager.getAmplifyMetaFilePath();
-  const amplifyMeta = JSON.parse(fs.readFileSync(amplifyMetaFilePath));
+  const amplifyMeta = readJsonFile(amplifyMetaFilePath);
 
   const currentamplifyMetaFilePath = pathManager.getCurentAmplifyMetaFilePath();
-  const currentamplifyMeta = JSON.parse(fs.readFileSync(currentamplifyMetaFilePath));
+  const currentamplifyMeta = readJsonFile(currentamplifyMetaFilePath);
 
   let resourcesToBeCreated = getResourcesToBeCreated(
     amplifyMeta,
     currentamplifyMeta,
     category,
     resourceName,
+    filteredResources,
   );
   let resourcesToBeUpdated = await getResourcesToBeUpdated(
     amplifyMeta,
     currentamplifyMeta,
     category,
     resourceName,
+    filteredResources,
   );
   let resourcesToBeDeleted = getResourcesToBeDeleted(
     amplifyMeta,
     currentamplifyMeta,
     category,
     resourceName,
+    filteredResources,
   );
 
   let allResources = getAllResources(
     amplifyMeta,
     category,
     resourceName,
+    filteredResources,
   );
 
   resourcesToBeCreated = resourcesToBeCreated.filter(resource => resource.category !== 'provider');
@@ -252,7 +308,7 @@ async function getResourceStatus(category, resourceName, providerName) {
   };
 }
 
-async function showResourceTable(category, resourceName) {
+async function showResourceTable(category, resourceName, filteredResources) {
   const { envName } = getEnvInfo();
 
   print.info('');
@@ -265,7 +321,7 @@ async function showResourceTable(category, resourceName) {
     resourcesToBeUpdated,
     resourcesToBeDeleted,
     allResources,
-  } = await getResourceStatus(category, resourceName);
+  } = await getResourceStatus(category, resourceName, undefined, filteredResources);
 
   let noChangeResources = _.differenceWith(
     allResources,

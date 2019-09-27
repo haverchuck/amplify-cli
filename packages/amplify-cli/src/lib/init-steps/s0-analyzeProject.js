@@ -1,10 +1,11 @@
 const path = require('path');
 const fs = require('fs-extra');
 const inquirer = require('inquirer');
-const { normalizeEditorCode, editorSelection } =
+const { normalizeEditor, editorSelection } =
   require('../../extensions/amplify-helpers/editor-selection');
 const { makeId } = require('../../extensions/amplify-helpers/make-id');
 const { PROJECT_CONFIG_VERSION } = require('../../extensions/amplify-helpers/constants');
+const { readJsonFile } = require('../../extensions/amplify-helpers/read-json-file');
 
 async function run(context) {
   context.print.warning('Note: It is recommended to run this command from the root of your app directory');
@@ -55,7 +56,7 @@ async function getProjectName(context) {
   const projectPath = process.cwd();
   if (!context.exeInfo.isNewProject) {
     const projectConfigFilePath = context.amplify.pathManager.getProjectConfigFilePath(projectPath);
-    ({ projectName } = JSON.parse(fs.readFileSync(projectConfigFilePath)));
+    ({ projectName } = readJsonFile(projectConfigFilePath));
     return projectName;
   }
 
@@ -107,7 +108,7 @@ function normalizeProjectName(projectName) {
 async function getEditor(context) {
   let editor;
   if (context.exeInfo.inputParams.amplify && context.exeInfo.inputParams.amplify.defaultEditor) {
-    editor = normalizeEditorCode(context.exeInfo.inputParams.amplify.defaultEditor);
+    editor = normalizeEditor(context.exeInfo.inputParams.amplify.defaultEditor);
   } else if (!context.exeInfo.inputParams.yes) {
     editor = await editorSelection(editor);
   }
@@ -145,7 +146,10 @@ async function getEnvName(context) {
       type: 'input',
       name: 'envName',
       message: 'Enter a name for the environment',
-      validate: input => new Promise((resolvePromise, reject) => (!isEnvNameValid(input) ? reject(new Error('Environment name should be between 2 and 10 characters (only lowercase alphabets).')) : resolvePromise(true))),
+      validate: input =>
+        (!isEnvNameValid(input)
+          ? 'Environment name should be between 2 and 10 characters (only lowercase alphabets).'
+          : true),
     };
 
     ({ envName } = await inquirer.prompt(envNameQuestion));
@@ -183,7 +187,7 @@ function isNewEnv(context, envName) {
   const providerInfoFilePath = context.amplify.pathManager.getProviderInfoFilePath(projectPath);
 
   if (fs.existsSync(providerInfoFilePath)) {
-    const envProviderInfo = JSON.parse(fs.readFileSync(providerInfoFilePath));
+    const envProviderInfo = readJsonFile(providerInfoFilePath);
     if (envProviderInfo[envName]) {
       newEnv = false;
     }
@@ -207,7 +211,7 @@ function getDefaultEditor(context) {
   const projectPath = process.cwd();
   const localEnvFilePath = context.amplify.pathManager.getLocalEnvFilePath(projectPath);
   if (fs.existsSync(localEnvFilePath)) {
-    ({ defaultEditor } = JSON.parse(fs.readFileSync(localEnvFilePath)));
+    ({ defaultEditor } = readJsonFile(localEnvFilePath));
   }
 
   return defaultEditor;

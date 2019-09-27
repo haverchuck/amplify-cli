@@ -7,7 +7,7 @@
 				"question": "Do you want to use the default authentication and security configuration?",
 				"type": "list",
 				"default": true,
-				"learnMore": "This utility allows you to set up Amazon Cognito User Pools and Identity Pools for your application.\nAmazon Cognito User Pool makes it easy for developers to add sign-up and sign-in functionality to web and mobile applications. It serves as your own identity provider to maintain a user directory. It supports user registration and sign-in, as well as provisioning identity tokens for signed-in users.\nAmazon Cognito identity pools provide temporary AWS credentials for users who are guests (unauthenticated) and for users who have been authenticated and received a token. An identity pool is a store of user identity data specific to your account.\nIf you choose to use the default configuration, this utility will set up both a Userpool and an Identity Pool.\nIf you choose the default configuration with Social Provider' the providers will be federated with Cognito User Pools.\nIn either case, User Pools will be federated with Identity Pools allowing any users logging in to get both identity tokens as well as AWS Credentials.",
+				"learnMore": "This utility allows you to set up Amazon Cognito User Pools and Identity Pools for your application.\nAmazon Cognito User Pool makes it easy for developers to add sign-up and sign-in functionality to web and mobile applications. It serves as your own identity provider to maintain a user directory. It supports user registration and sign-in, as well as provisioning identity tokens for signed-in users.\nAmazon Cognito identity pools provide temporary AWS credentials for users who are guests (unauthenticated) and for users who have been authenticated and received a token. An identity pool is a store of user identity data specific to your account.\nIf you choose to use the default configuration, this utility will set up both a Userpool and an Identity Pool.\nIf you choose the 'Default configuration with Social Provider (Federation)', the providers will be federated with Cognito User Pools.\nIn either case, User Pools will be federated with Identity Pools allowing any users logging in to get both identity tokens as well as AWS Credentials.",
 				"map": "defaultPrompMap",
 				"andConditions": [
 					{
@@ -260,7 +260,7 @@
 			},
 			{
 				"key": "usernameAttributes",
-				"question": "How do you want users to be able to sign in when using your Cognito User Pool?",
+				"question": "How do you want users to be able to sign in?",
 				"type": "list",
 				"map": "signInOptions",
 				"prefix": "Warning: you will not be able to edit these selections.",
@@ -278,6 +278,30 @@
 					}
 				]
 			},
+
+			{
+				"key": "additionalQuestions",
+				"question": "Do you want to configure advanced settings?",
+				"type": "list",
+				"map": "additonalConfigMap",
+				"required": true,
+				"andConditions": [
+					{
+						"key": "authSelections",
+						"value": "identityPoolOnly",
+						"operator": "!="
+					},
+					{
+						"preventEdit": "always"
+					},
+					{
+						"key": "useDefault",
+						"value": "manual",
+						"operator": "!="
+					}
+				]
+			},
+
 			{
 				"key": "mfaConfiguration",
 				"question": "Multifactor authentication (MFA) user login options:",
@@ -543,6 +567,18 @@
 						"value": "identityPoolOnly",
 						"operator": "!="
 					}
+				],
+				"orConditions": [
+					{
+						"key": "additionalQuestions",
+						"value": "triggers",
+						"operator": "includes"
+					},
+					{
+						"key": "useDefault",
+						"value": "manual",
+						"operator": "="
+					}
 				]
 			},
 			{
@@ -563,8 +599,8 @@
 				],
 				"validation": {
 					"operator": "range",
-					"value": {"min": 1, "max": 365},
-					"onErrorMsg": "Token expiration should be between 1 to 365 days."
+					"value": {"min": 1, "max": 3650},
+					"onErrorMsg": "Token expiration should be between 1 to 3650 days."
 				}
 			},
 			{
@@ -627,6 +663,32 @@
 				]
 			},
 			{
+				"key": "triggers",
+				"question": "Do you want to enable any of the following capabilities?",
+				"required": true,
+				"type": "multiselect",
+				"map": "capabilities",
+				"andConditions": [
+					{
+						"key": "authSelections",
+						"value": "identityPoolOnly",
+						"operator": "!="
+					}
+				],
+				"orConditions": [
+					{
+						"key": "additionalQuestions",
+						"value": "triggers",
+						"operator": "includes"
+					},
+					{
+						"key": "useDefault",
+						"value": "manual",
+						"operator": "="
+					}
+				]
+			},
+			{
 				"key": "hostedUI",
 				"question": "Do you want to use an OAuth flow?",
 				"learnMore": "When you create a user pool in Amazon Cognito and configure a domain for it, Amazon Cognito automatically provisions a hosted web UI to let you add sign-up and sign-in pages to your app.",
@@ -659,8 +721,8 @@
 				],
 				"validation": {
 					"operator": "regex",
-					"value": "^[a-z0-9](?:[a-z0-9\\-]{0,61}[a-z0-9])?$",
-					"onErrorMsg": "The value must be a valid domain name format.  A valid format consists of lowercase alphanumeric characters."
+					"value": "^(?!([a-z0-9]{0,1})(?!((?!aws)(?!amazon).)*$))(?:[a-z0-9\\-]{0,61}[a-z0-9])?$",
+					"onErrorMsg": "The value must be a valid domain name format.  A valid format consists of lowercase alphanumeric characters or hyphens. Hyphens cannot be at the beginning or end of the string. The domain cannot use the reserved words 'aws' or 'amazon'."
 				}
 			},
 			{

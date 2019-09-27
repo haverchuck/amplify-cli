@@ -8,20 +8,21 @@ const S3 = require('../src/aws-utils/aws-s3');
 const constants = require('./constants');
 const configurationManager = require('./configuration-manager');
 const systemConfigManager = require('./system-config-manager');
+const proxyAgent = require('proxy-agent');
 
 async function run(context) {
   await configurationManager.init(context);
   if (!context.exeInfo || (context.exeInfo.isNewEnv)) {
-    const awscfn = await getConfiguredAwsCfnClient(context);
     const initTemplateFilePath = path.join(__dirname, 'rootStackTemplate.json');
-    const timeStamp = `-${moment().format('YYYYMMDDHHmmss')}`;
-    const stackName = normalizeStackName(context.exeInfo.projectConfig.projectName + timeStamp);
+    const timeStamp = `${moment().format('YYYYMMDDHHmmss')}`;
+    const { envName = '' } = context.exeInfo.localEnvInfo;
+    const stackName = normalizeStackName(`${context.exeInfo.projectConfig.projectName}-${envName}-${timeStamp}`);
     const deploymentBucketName = `${stackName}-deployment`;
     const authRoleName = `${stackName}-authRole`;
     const unauthRoleName = `${stackName}-unauthRole`;
     const params = {
       StackName: stackName,
-      Capabilities: ['CAPABILITY_NAMED_IAM'],
+      Capabilities: ['CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND'],
       TemplateBody: fs.readFileSync(initTemplateFilePath).toString(),
       Parameters: [
         {
@@ -40,8 +41,9 @@ async function run(context) {
     };
 
     const spinner = ora();
+    const awsConfig = await getAwsConfig(context);
     spinner.start('Initializing project in the cloud...');
-    return new Cloudformation(context, awscfn, 'init')
+    return new Cloudformation(context, 'init', awsConfig)
       .then(cfnItem => cfnItem.createResourceStack(params))
       .then((waitData) => {
         processStackCreationData(context, waitData);
@@ -55,23 +57,32 @@ async function run(context) {
   }
 }
 
-async function getConfiguredAwsCfnClient(context) {
+async function getAwsConfig(context) {
   const { awsConfigInfo } = context.exeInfo;
-  process.env.AWS_SDK_LOAD_CONFIG = true;
-  const aws = require('aws-sdk');
-  let awsconfig;
-  if (awsConfigInfo.config.useProfile) {
-    awsconfig =
-      await systemConfigManager.getProfiledAwsConfig(context, awsConfigInfo.config.profileName);
-  } else {
-    awsconfig = {
-      accessKeyId: awsConfigInfo.config.accessKeyId,
-      secretAccessKey: awsConfigInfo.config.secretAccessKey,
-      region: awsConfigInfo.config.region,
+  const httpProxy = process.env.HTTP_PROXY || process.env.HTTPS_PROXY;
+
+  let awsConfig;
+  if (awsConfigInfo.configLevel === 'project') {
+    if (awsConfigInfo.config.useProfile) {
+      awsConfig =
+        await systemConfigManager.getProfiledAwsConfig(context, awsConfigInfo.config.profileName);
+    } else {
+      awsConfig = {
+        accessKeyId: awsConfigInfo.config.accessKeyId,
+        secretAccessKey: awsConfigInfo.config.secretAccessKey,
+        region: awsConfigInfo.config.region,
+      };
+    }
+  }
+
+  if (httpProxy) {
+    awsConfig = {
+      ...awsConfig,
+      httpOptions: { agent: proxyAgent(httpProxy) },
     };
   }
-  aws.config.update(awsconfig);
-  return aws;
+
+  return awsConfig;
 }
 
 function processStackCreationData(context, stackDescriptiondata) {

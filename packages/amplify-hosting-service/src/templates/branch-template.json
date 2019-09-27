@@ -1,0 +1,13 @@
+{
+    "Type": "AWS::Amplify::Branch",
+    "DependsOn": "AmplifyApp",
+    "Properties": {
+        "BranchName": "PlaceHolder",
+        "AppId": {
+            "Fn::GetAtt": [
+                "AmplifyApp",
+                "AppId"
+            ]
+        }
+    }
+}

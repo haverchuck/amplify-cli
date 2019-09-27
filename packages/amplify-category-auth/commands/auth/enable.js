@@ -1,5 +1,5 @@
-const fs = require('fs');
 const { messages } = require('../../provider-utils/awscloudformation/assets/string-maps');
+const path = require('path');
 
 const subcommand = 'enable';
 const category = 'auth';
@@ -10,7 +10,7 @@ module.exports = {
   alias: ['add'],
   run: async (context) => {
     const { amplify } = context;
-    const servicesMetadata = JSON.parse(fs.readFileSync(`${__dirname}/../../provider-utils/supported-services.json`));
+    const servicesMetadata = amplify.readJsonFile(`${__dirname}/../../provider-utils/supported-services.json`);
 
     const existingAuth = amplify.getProjectDetails().amplifyMeta.auth || {};
 
@@ -32,6 +32,17 @@ module.exports = {
         return providerController.addResource(context, category, result.service);
       })
       .then((resourceName) => {
+        const resourceDirPath = path.join(
+          amplify.pathManager.getBackendDirPath(),
+          '/auth/',
+          resourceName,
+          'parameters.json',
+        );
+        const authParameters = amplify.readJsonFile(resourceDirPath);
+
+        if (authParameters.dependsOn) {
+          options.dependsOn = authParameters.dependsOn;
+        }
         amplify.updateamplifyMetaAfterResourceAdd(category, resourceName, options);
         const { print } = context;
         print.success(`Successfully added resource ${resourceName} locally`);

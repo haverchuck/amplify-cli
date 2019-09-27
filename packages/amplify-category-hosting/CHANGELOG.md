@@ -3,6 +3,134 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [1.8.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.8.0) (2019-08-30)
+
+
+### Bug Fixes
+
+* [#429](https://github.com/aws-amplify/amplify-cli/issues/429) - Editor hanging bug ([#2086](https://github.com/aws-amplify/amplify-cli/issues/2086)) ([6767445](https://github.com/aws-amplify/amplify-cli/commit/6767445))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.7.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.7.0) (2019-08-28)
+
+
+### Bug Fixes
+
+* [#429](https://github.com/aws-amplify/amplify-cli/issues/429) - Editor hanging bug ([#2086](https://github.com/aws-amplify/amplify-cli/issues/2086)) ([6767445](https://github.com/aws-amplify/amplify-cli/commit/6767445))
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.6.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.6.0) (2019-08-13)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.5.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.5.0) (2019-08-07)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.4.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.4.0) (2019-08-02)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+# [1.3.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.2...amplify-category-hosting@1.3.0) (2019-07-31)
+
+
+### Features
+
+* adding amplify cli predictions category ([#1936](https://github.com/aws-amplify/amplify-cli/issues/1936)) ([b7b7c2c](https://github.com/aws-amplify/amplify-cli/commit/b7b7c2c))
+
+
+
+
+
+## [1.2.2](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.1...amplify-category-hosting@1.2.2) (2019-06-20)
+
+
+### Bug Fixes
+
+* **cli:** fix inquirer version ([#1690](https://github.com/aws-amplify/amplify-cli/issues/1690)) ([9246032](https://github.com/aws-amplify/amplify-cli/commit/9246032)), closes [#1688](https://github.com/aws-amplify/amplify-cli/issues/1688)
+
+
+
+
+
+## [1.2.1](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.2.0...amplify-category-hosting@1.2.1) (2019-06-06)
+
+
+### Bug Fixes
+
+* **amplify-category-hosting:** fix CloudFront invalidation bug ([#1553](https://github.com/aws-amplify/amplify-cli/issues/1553)) ([2a5ef17](https://github.com/aws-amplify/amplify-cli/commit/2a5ef17)), closes [#1550](https://github.com/aws-amplify/amplify-cli/issues/1550)
+
+
+
+
+
+# [1.2.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.1.2...amplify-category-hosting@1.2.0) (2019-05-29)
+
+
+### Features
+
+* flow to add policies to access amplify resources from Lambda ([#1462](https://github.com/aws-amplify/amplify-cli/issues/1462)) ([fee247c](https://github.com/aws-amplify/amplify-cli/commit/fee247c))
+
+
+
+
+
+## [1.1.2](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.1.1...amplify-category-hosting@1.1.2) (2019-05-17)
+
+**Note:** Version bump only for package amplify-category-hosting
+
+
+
+
+
+## [1.1.1](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.1.0...amplify-category-hosting@1.1.1) (2019-04-30)
+
+
+### Bug Fixes
+
+* update CLI to handle UTF8 BOM ([#1357](https://github.com/aws-amplify/amplify-cli/issues/1357)) ([b0afa07](https://github.com/aws-amplify/amplify-cli/commit/b0afa07)), closes [#1355](https://github.com/aws-amplify/amplify-cli/issues/1355) [#1122](https://github.com/aws-amplify/amplify-cli/issues/1122)
+
+
+
+
+
 # [1.1.0](https://github.com/aws-amplify/amplify-cli/compare/amplify-category-hosting@1.0.5...amplify-category-hosting@1.1.0) (2019-03-05)
 
 

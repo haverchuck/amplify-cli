@@ -1,4 +1,4 @@
-const opn = require('opn');
+const open = require('open');
 const constants = require('./constants');
 
 function console(context) {
@@ -11,9 +11,9 @@ function console(context) {
     const { Id, Region } = pinpointApp;
     const consoleUrl =
           `https://${Region}.console.aws.amazon.com/pinpoint/home/?region=${Region}#/apps/${Id}/analytics/overview`;
-    opn(consoleUrl, { wait: false });
+    open(consoleUrl, { wait: false });
   } else {
-    context.print.error('Neither analytics nor notifications is anabled in the cloud.');
+    context.print.error('Neither analytics nor notifications is enabled in the cloud.');
   }
 }
 

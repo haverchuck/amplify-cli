@@ -1,7 +1,10 @@
-const fs = require('fs');
 const inquirer = require('inquirer');
-const opn = require('opn');
+const open = require('open');
 const _ = require('lodash');
+const {
+  existsSync,
+} = require('fs');
+const { copySync } = require('fs-extra');
 
 let serviceMetadata;
 
@@ -67,7 +70,7 @@ const privateKeys = [
   'newLogoutURLs',
   'editLogoutURLs',
   'addLogoutOnUpdate',
-  'audiences',
+  'additionalQuestions',
 ];
 
 function serviceQuestions(
@@ -98,9 +101,11 @@ async function copyCfnTemplate(context, category, options, cfnFilename) {
     },
   ];
 
-  // copy over the files
-  // Todo: move to provider as each provider should decide where to store vars, and cfn
-  return await context.amplify.copyBatch(context, copyJobs, options, true, false, privateKeys);
+  const privateParams = Object.assign({}, options);
+  privateKeys.forEach(p => delete privateParams[p]);
+
+
+  return await context.amplify.copyBatch(context, copyJobs, privateParams, true);
 }
 
 function saveResourceParameters(
@@ -112,19 +117,21 @@ function saveResourceParameters(
   envSpecificParams = [],
 ) {
   const provider = context.amplify.getPluginInstance(context, providerName);
+  let privateParams = Object.assign({}, params);
+  privateKeys.forEach(p => delete privateParams[p]);
+  privateParams = removeDeprecatedProps(privateParams);
   provider.saveResourceParameters(
     context,
     category,
     resource,
-    params,
+    privateParams,
     envSpecificParams,
-    privateKeys,
   );
 }
 
 async function addResource(context, category, service) {
   let props = {};
-  serviceMetadata = JSON.parse(fs.readFileSync(`${__dirname}/../supported-services.json`))[service];
+  serviceMetadata = context.amplify.readJsonFile(`${__dirname}/../supported-services.json`)[service];
   const {
     cfnFilename,
     defaultValuesFilename,
@@ -132,7 +139,9 @@ async function addResource(context, category, service) {
     serviceWalkthroughFilename,
     provider,
   } = serviceMetadata;
-  const projectName = context.amplify.getProjectConfig().projectName.toLowerCase();
+  let projectName = context.amplify.getProjectConfig().projectName.toLowerCase();
+  const disallowedChars = /[^A-Za-z0-9]+/g;
+  projectName = projectName.replace(disallowedChars, '');
 
   return serviceQuestions(
     context,
@@ -142,7 +151,11 @@ async function addResource(context, category, service) {
   )
     .then(async (result) => {
       const defaultValuesSrc = `${__dirname}/assets/${defaultValuesFilename}`;
-      const { functionMap, generalDefaults, roles } = require(defaultValuesSrc);
+      const {
+        functionMap,
+        generalDefaults,
+        roles,
+      } = require(defaultValuesSrc);
 
       /* if user has used the default configuration,
        * we populate base choices like authSelections and resourceName for them */
@@ -150,9 +163,13 @@ async function addResource(context, category, service) {
         result = Object.assign(generalDefaults(projectName), result);
       }
 
+      await verificationBucketName(result);
+
       /* merge actual answers object into props object,
        * ensuring that manual entries override defaults */
       props = Object.assign(functionMap[result.authSelections](result.resourceName), result, roles);
+
+      await lambdaTriggers(props, context, null);
 
       await copyCfnTemplate(context, category, props, cfnFilename);
       saveResourceParameters(
@@ -164,13 +181,16 @@ async function addResource(context, category, service) {
         ENV_SPECIFIC_PARAMS,
       );
     })
-    .then(() => props.resourceName);
+    .then(async () => {
+      await copyS3Assets(context, props);
+      return props.resourceName;
+    });
 }
 
 async function updateResource(context, category, serviceResult) {
   const { service, resourceName } = serviceResult;
   let props = {};
-  serviceMetadata = JSON.parse(fs.readFileSync(`${__dirname}/../supported-services.json`))[service];
+  serviceMetadata = context.amplify.readJsonFile(`${__dirname}/../supported-services.json`)[service];
   const {
     cfnFilename,
     defaultValuesFilename,
@@ -210,8 +230,14 @@ async function updateResource(context, category, serviceResult) {
           delete context.updatingAuth[safeDefaults[i]];
         }
       }
-      props = Object.assign(defaults, context.updatingAuth, result);
 
+      await verificationBucketName(result, context.updatingAuth);
+
+      props = Object.assign(defaults, removeDeprecatedProps(context.updatingAuth), result);
+
+      const providerPlugin = context.amplify.getPluginInstance(context, provider);
+      const previouslySaved = providerPlugin.loadResourceParameters(context, 'auth', resourceName).triggers || '{}';
+      await lambdaTriggers(props, context, JSON.parse(previouslySaved));
 
       if (
         (!result.updateFlow && !result.thirdPartyAuth) ||
@@ -246,11 +272,14 @@ async function updateResource(context, category, serviceResult) {
       await copyCfnTemplate(context, category, props, cfnFilename);
       saveResourceParameters(context, provider, category, resourceName, props, ENV_SPECIFIC_PARAMS);
     })
-    .then(() => props.resourceName);
+    .then(async () => {
+      await copyS3Assets(context, props);
+      return props.resourceName;
+    });
 }
 
 async function updateConfigOnEnvInit(context, category, service) {
-  const srvcMetaData = JSON.parse(fs.readFileSync(`${__dirname}/../supported-services.json`))
+  const srvcMetaData = context.amplify.readJsonFile(`${__dirname}/../supported-services.json`)
     .Cognito;
   const { defaultValuesFilename, stringMapFilename, serviceWalkthroughFilename } = srvcMetaData;
 
@@ -283,7 +312,7 @@ async function updateConfigOnEnvInit(context, category, service) {
       });
 
       if (missingParams.length) {
-        throw Error(`auth headless init is missing the following inputParams ${missingParams.join(', ')}`);
+        throw new Error(`auth headless init is missing the following inputParams ${missingParams.join(', ')}`);
       }
     }
     if (resourceParams.hostedUIProviderMeta) {
@@ -333,7 +362,7 @@ async function migrate(context) {
   if (!Object.keys(existingAuth).length > 0) {
     return;
   }
-  const servicesMetadata = JSON.parse(fs.readFileSync(`${__dirname}/../../provider-utils/supported-services.json`));
+  const servicesMetadata = amplify.readJsonFile(`${__dirname}/../../provider-utils/supported-services.json`);
   const { provider, cfnFilename, defaultValuesFilename } = servicesMetadata.Cognito;
   const defaultValuesSrc = `${__dirname}/assets/${defaultValuesFilename}`;
 
@@ -502,18 +531,138 @@ function getCognitoOutput(amplifyMeta) {
 
 async function openUserPoolConsole(context, region, userPoolId) {
   const userPoolConsoleUrl =
-    `https://console.aws.amazon.com/cognito/users/?region=${region}#/pool/${userPoolId}`;
-  await opn(userPoolConsoleUrl, { wait: false });
+    `https://${region}.console.aws.amazon.com/cognito/users/?region=${region}#/pool/${userPoolId}/details`;
+  await open(userPoolConsoleUrl, { wait: false });
   context.print.info('User Pool console:');
   context.print.success(userPoolConsoleUrl);
 }
 
 async function openIdentityPoolConsole(context, region, identityPoolId) {
   const identityPoolConsoleUrl =
-    `https://console.aws.amazon.com/cognito/pool/?region=${region}&id=${identityPoolId}`;
-  await opn(identityPoolConsoleUrl, { wait: false });
+    `https://${region}.console.aws.amazon.com/cognito/pool/?region=${region}&id=${identityPoolId}`;
+  await open(identityPoolConsoleUrl, { wait: false });
   context.print.info('Identity Pool console:');
   context.print.success(identityPoolConsoleUrl);
+}
+
+function getPermissionPolicies(context, service, resourceName, crudOptions) {
+  serviceMetadata = context.amplify.readJsonFile(`${__dirname}/../supported-services.json`)[service];
+  const { serviceWalkthroughFilename } = serviceMetadata;
+  const serviceWalkthroughSrc = `${__dirname}/service-walkthroughs/${serviceWalkthroughFilename}`;
+  const { getIAMPolicies } = require(serviceWalkthroughSrc);
+
+  if (!getPermissionPolicies) {
+    context.print.info(`No policies found for ${resourceName}`);
+    return;
+  }
+
+  return getIAMPolicies(resourceName, crudOptions);
+}
+
+async function lambdaTriggers(coreAnswers, context, previouslySaved) {
+  const { handleTriggers } = require('./utils/trigger-flow-auth-helper');
+  let triggerKeyValues = {};
+
+  if (coreAnswers.triggers) {
+    triggerKeyValues = await handleTriggers(context, coreAnswers, previouslySaved);
+    coreAnswers.triggers = triggerKeyValues ?
+      JSON.stringify(triggerKeyValues) :
+      '{}';
+
+    if (triggerKeyValues) {
+      coreAnswers.parentStack = { Ref: 'AWS::StackId' };
+    }
+
+    // determine permissions needed for each trigger module
+    coreAnswers.permissions = await context.amplify.getTriggerPermissions(context, coreAnswers.triggers, 'auth', coreAnswers.resourceName);
+  } else if (previouslySaved) {
+    const targetDir = context.amplify.pathManager.getBackendDirPath();
+    Object.keys(previouslySaved).forEach((p) => {
+      delete coreAnswers[p];
+    });
+    await context.amplify
+      .deleteAllTriggers(previouslySaved, coreAnswers.resourceName, targetDir, context);
+  }
+  // remove unused coreAnswers.triggers key
+  if (coreAnswers.triggers && coreAnswers.triggers === '[]') {
+    delete coreAnswers.triggers;
+  }
+
+  // handle dependsOn data
+  const dependsOnKeys = Object.keys(triggerKeyValues).map(i => `${coreAnswers.resourceName}${i}`);
+  coreAnswers.dependsOn = context.amplify.dependsOnBlock(context, dependsOnKeys, 'Cognito');
+}
+
+async function copyS3Assets(context, props) {
+  const targetDir = `${context.amplify.pathManager.getBackendDirPath()}/auth/${props.resourceName}/assets`;
+
+  const triggers = props.triggers ? JSON.parse(props.triggers) : null;
+  const confirmationFileNeeded = props.triggers &&
+    triggers.CustomMessage &&
+    triggers.CustomMessage.includes('verification-link');
+  if (confirmationFileNeeded) {
+    if (!existsSync(targetDir)) {
+      const source = `${__dirname}/triggers/CustomMessage/assets`;
+      copySync(source, `${targetDir}`);
+    }
+  }
+}
+
+async function verificationBucketName(current, previous) {
+  if (
+    current.triggers &&
+    current.triggers.CustomMessage &&
+    current.triggers.CustomMessage.includes('verification-link')) {
+    const name = previous ? previous.resourceName : current.resourceName;
+    current.verificationBucketName = `${name.toLowerCase()}verificationbucket`;
+  } else if (
+    previous &&
+    previous.triggers &&
+    previous.triggers.CustomMessage &&
+    previous.triggers.CustomMessage.includes('verification-link') &&
+    previous.verificationBucketName &&
+    (!current.triggers || !current.triggers.CustomMessage || !current.triggers.CustomMessage.includes('verification-link'))
+  ) {
+    delete previous.updatingAuth.verificationBucketName;
+  }
+}
+
+function removeDeprecatedProps(props) {
+  if (props.authRoleName) { delete props.authRoleName; }
+  if (props.unauthRoleName) { delete props.unauthRoleName; }
+  if (props.userpoolClientName) { delete props.userpoolClientName; }
+  if (props.roleName) { delete props.roleName; }
+  if (props.policyName) { delete props.policyName; }
+  if (props.mfaLambdaLogPolicy) { delete props.mfaLambdaLogPolicy; }
+  if (props.mfaPassRolePolicy) { delete props.mfaPassRolePolicy; }
+  if (props.mfaLambdaIAMPolicy) { delete props.mfaLambdaIAMPolicy; }
+  if (props.userpoolClientLogPolicy) { delete props.userpoolClientLogPolicy; }
+  if (props.userpoolClientLambdaPolicy) { delete props.userpoolClientLambdaPolicy; }
+  if (props.lambdaLogPolicy) { delete props.lambdaLogPolicy; }
+  if (props.openIdRolePolicy) { delete props.openIdRolePolicy; }
+  if (props.openIdRopenIdLambdaIAMPolicyolePolicy) { delete props.openIdLambdaIAMPolicy; }
+  if (props.openIdLogPolicy) { delete props.openIdLogPolicy; }
+  if (props.mfaLambdaRole) { delete props.mfaLambdaRole; }
+  if (props.openIdLambdaRoleName) { delete props.openIdLambdaRoleName; }
+
+
+  const keys = Object.keys(props);
+  const deprecatedTriggerParams = [
+    'CreateAuthChallenge',
+    'CustomMessage',
+    'DefineAuthChallenge',
+    'PostAuthentication',
+    'PostConfirmation',
+    'PreAuthentication',
+    'PreSignup',
+    'VerifyAuthChallengeResponse',
+  ];
+  keys.forEach((el) => {
+    if (deprecatedTriggerParams.includes(el)) {
+      delete props[el];
+    }
+  });
+  return props;
 }
 
 module.exports = {
@@ -525,4 +674,5 @@ module.exports = {
   copyCfnTemplate,
   migrate,
   console,
+  getPermissionPolicies,
 };

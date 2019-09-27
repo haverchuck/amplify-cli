@@ -11,7 +11,10 @@ const getGraphQLDocPath = require('./getGraphQLDocPath');
 const downloadIntrospectionSchemaWithProgress = require('./generateIntrospectionSchemaWithProgress');
 const isAppSyncApiPendingPush = require('./isAppSyncApiPendingPush');
 const updateAmplifyMeta = require('./updateAmplifyMeta');
-const selectAPIKey = require('./selectAPIKey');
+const isCodegenConfigured = require('./isCodegenConfigured');
+const getSDLSchemaLocation = require('./getSDLSchemaLocation');
+const switchToSDLSchema = require('./switchToSDLSchema');
+const ensureIntrospectionSchema = require('./ensureIntrospectionSchema');
 
 module.exports = {
   getAppSyncAPIDetails,
@@ -27,5 +30,8 @@ module.exports = {
   getGraphQLDocPath,
   isAppSyncApiPendingPush,
   updateAmplifyMeta,
-  selectAPIKey,
+  isCodegenConfigured,
+  getSDLSchemaLocation,
+  switchToSDLSchema,
+  ensureIntrospectionSchema,
 };

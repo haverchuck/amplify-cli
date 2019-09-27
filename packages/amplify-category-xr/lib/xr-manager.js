@@ -1,7 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 const inquirer = require('inquirer');
-const opn = require('opn');
+const open = require('open');
 const chalk = require('chalk');
 const { URL } = require('url');
 
@@ -19,7 +19,7 @@ async function ensureSetup(context, resourceName) {
 
 async function setupAccess(context, resourceName) {
   let templateFilePath = path.join(__dirname, constants.TemplateFileName);
-  const template = JSON.parse(fs.readFileSync(templateFilePath));
+  const template = context.amplify.readJsonFile(templateFilePath);
 
   const answer = await inquirer.prompt({
     name: 'allowUnAuthAccess',
@@ -139,7 +139,7 @@ async function addSceneConfig(context, sceneName) {
     validate: (configFilePath) => {
       try {
         if (fs.existsSync(configFilePath)) {
-          sumerianConfig = require(configFilePath);
+          sumerianConfig = context.amplify.readJsonFile(configFilePath);
 
           // Sumerian config must have a url and sceneId
           if (!sumerianConfig.url || !sumerianConfig.sceneId) {
@@ -222,7 +222,7 @@ async function remove(context) {
 
 function console(context) {
   context.print.info(chalk.green(SUMERIAN_CONSOLE_URL));
-  opn(SUMERIAN_CONSOLE_URL, { wait: false });
+  open(SUMERIAN_CONSOLE_URL, { wait: false });
 }
 
 function getProjectNameFromPath(urlPath) {
@@ -258,6 +258,52 @@ function isSceneNameValid(sceneName) {
           /^[a-zA-Z0-9]+$/i.test(sceneName);
 }
 
+function getIAMPolicies(context, resourceName, crudOptions) {
+  let policy = {};
+  let actions = new Set();
+
+  crudOptions.forEach((crudOption) => {
+    switch (crudOption) {
+      case 'create': actions.add('sumerian:Login');
+        break;
+      case 'read': actions.add('sumerian:ViewRelease');
+        break;
+      default: context.print.warning(`${crudOption} operation is not supported for ${resourceName}`);
+    }
+  });
+
+  actions = Array.from(actions);
+  policy = {
+    Effect: 'Allow',
+    Action: actions,
+    Resource: [
+      {
+        'Fn::Join': [
+          '',
+          [
+            'arn:aws:sumerian:',
+            {
+              Ref: 'AWS::Region',
+            },
+            ':',
+            {
+              Ref: 'AWS::AccountId',
+            },
+            ':project:',
+            {
+              Ref: `${constants.CategoryName}${resourceName}projectName`,
+            },
+          ],
+        ],
+      },
+    ],
+  };
+
+  const attributes = ['projectName', 'sceneId'];
+
+  return { policy, attributes };
+}
+
 module.exports = {
   isXRSetup,
   ensureSetup,
@@ -267,4 +313,5 @@ module.exports = {
   addSceneConfig,
   remove,
   console,
+  getIAMPolicies,
 };

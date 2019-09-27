@@ -1,7 +1,7 @@
 const category = 'auth';
-const fs = require('fs');
 const _ = require('lodash');
 const uuid = require('uuid');
+const path = require('path');
 const sequential = require('promise-sequential');
 const defaults = require('./provider-utils/awscloudformation/assets/cognito-defaults');
 const {
@@ -15,7 +15,7 @@ const {
 // this function is being kept for temporary compatability.
 async function add(context) {
   const { amplify } = context;
-  const servicesMetadata = JSON.parse(fs.readFileSync(`${__dirname}/provider-utils/supported-services.json`));
+  const servicesMetadata = amplify.readJsonFile(`${__dirname}/provider-utils/supported-services.json`);
 
   const existingAuth = amplify.getProjectDetails().amplifyMeta.auth || {};
 
@@ -43,6 +43,17 @@ async function add(context) {
         service: resultMetadata.service,
         providerPlugin: resultMetadata.providerName,
       };
+      const resourceDirPath = path.join(
+        amplify.pathManager.getBackendDirPath(),
+        '/auth/',
+        resourceName,
+        'parameters.json',
+      );
+      const authParameters = amplify.readJsonFile(resourceDirPath);
+
+      if (authParameters.dependsOn) {
+        options.dependsOn = authParameters.dependsOn;
+      }
       amplify.updateamplifyMetaAfterResourceAdd(category, resourceName, options);
       context.print.success('Successfully added auth resource');
       return resourceName;
@@ -55,7 +66,7 @@ async function add(context) {
 
 async function externalAuthEnable(context, externalCategory, resourceName, requirements) {
   const { amplify } = context;
-  const serviceMetadata = JSON.parse(fs.readFileSync(`${__dirname}/provider-utils/supported-services.json`));
+  const serviceMetadata = amplify.readJsonFile(`${__dirname}/provider-utils/supported-services.json`);
   const { cfnFilename, provider } = serviceMetadata.Cognito;
   const authExists =
     amplify.getProjectDetails().amplifyMeta.auth &&
@@ -136,6 +147,17 @@ async function externalAuthEnable(context, externalCategory, resourceName, requi
         service: 'Cognito',
         providerPlugin: 'awscloudformation',
       };
+      const resourceDirPath = path.join(
+        amplify.pathManager.getBackendDirPath(),
+        '/auth/',
+        authProps.resourceName,
+        'parameters.json',
+      );
+      const authParameters = amplify.readJsonFile(resourceDirPath);
+
+      if (authParameters.dependsOn) {
+        options.dependsOn = authParameters.dependsOn;
+      }
       await amplify.updateamplifyMetaAfterResourceAdd(category, authProps.resourceName, options);
     }
     const action = authExists ? 'updated' : 'added';
@@ -165,9 +187,13 @@ async function checkRequirements(requirements, context) {
   let authParameters;
 
   if (existingAuth && Object.keys(existingAuth).length > 0) {
-    authParameters = JSON.parse(fs.readFileSync(`${amplify.pathManager.getBackendDirPath()}/auth/${
-      Object.keys(existingAuth)[0]
-    }/parameters.json`));
+    const resourceDirPath = path.join(
+      amplify.pathManager.getBackendDirPath(),
+      '/auth/',
+      Object.keys(existingAuth)[0],
+      'parameters.json',
+    );
+    authParameters = amplify.readJsonFile(resourceDirPath);
   } else {
     return { authEnabled: false };
   }
@@ -189,12 +215,25 @@ async function checkRequirements(requirements, context) {
 async function initEnv(context) {
   const { amplify } = context;
   const { resourcesToBeCreated, resourcesToBeDeleted, resourcesToBeUpdated } = await amplify.getResourceStatus('auth');
+  let toBeCreated = [];
+  let toBeDeleted = [];
+  let toBeUpdated = [];
 
-  resourcesToBeDeleted.forEach((authResource) => {
+  if (resourcesToBeCreated && resourcesToBeCreated.length > 0) {
+    toBeCreated = resourcesToBeCreated.filter(a => a.category === 'auth');
+  }
+  if (resourcesToBeDeleted && resourcesToBeDeleted.length > 0) {
+    toBeDeleted = resourcesToBeDeleted.filter(b => b.category === 'auth');
+  }
+  if (resourcesToBeUpdated && resourcesToBeUpdated.length > 0) {
+    toBeUpdated = resourcesToBeUpdated.filter(c => c.category === 'auth');
+  }
+
+  toBeDeleted.forEach((authResource) => {
     amplify.removeResourceParameters(context, 'auth', authResource.resourceName);
   });
 
-  const tasks = resourcesToBeCreated.concat(resourcesToBeUpdated);
+  const tasks = toBeCreated.concat(toBeUpdated);
 
   const authTasks = tasks.map((authResource) => {
     const { resourceName } = authResource;
@@ -210,7 +249,7 @@ async function initEnv(context) {
 
 async function console(context) {
   const { amplify } = context;
-  const supportedServices = JSON.parse(fs.readFileSync(`${__dirname}/provider-utils/supported-services.json`));
+  const supportedServices = amplify.readJsonFile(`${__dirname}/provider-utils/supported-services.json`);
   const amplifyMeta = amplify.getProjectMeta();
 
   if (!amplifyMeta.auth || Object.keys(amplifyMeta.auth).length === 0) {
@@ -232,6 +271,36 @@ async function console(context) {
     });
 }
 
+async function getPermissionPolicies(context, resourceOpsMapping) {
+  const amplifyMetaFilePath = context.amplify.pathManager.getAmplifyMetaFilePath();
+  const amplifyMeta = context.amplify.readJsonFile(amplifyMetaFilePath);
+  const permissionPolicies = [];
+  const resourceAttributes = [];
+
+  Object.keys(resourceOpsMapping).forEach((resourceName) => {
+    try {
+      const providerController = require(`./provider-utils/${amplifyMeta[category][resourceName].providerPlugin}/index`);
+      if (providerController) {
+        const { policy, attributes } = providerController.getPermissionPolicies(
+          context,
+          amplifyMeta[category][resourceName].service,
+          resourceName,
+          resourceOpsMapping[resourceName],
+        );
+        permissionPolicies.push(policy);
+        resourceAttributes.push({ resourceName, attributes, category });
+      } else {
+        context.print.error(`Provider not configured for ${category}: ${resourceName}`);
+      }
+    } catch (e) {
+      context.print.warning(`Could not get policies for ${category}: ${resourceName}`);
+      throw e;
+    }
+  });
+  return { permissionPolicies, resourceAttributes };
+}
+
+
 module.exports = {
   externalAuthEnable,
   checkRequirements,
@@ -239,4 +308,5 @@ module.exports = {
   migrate,
   initEnv,
   console,
+  getPermissionPolicies,
 };

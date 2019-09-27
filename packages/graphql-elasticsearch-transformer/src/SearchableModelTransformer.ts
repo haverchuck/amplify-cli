@@ -1,4 +1,6 @@
-import { Transformer, TransformerContext } from "graphql-transformer-core";
+import {
+    Transformer, TransformerContext, getDirectiveArguments,
+    gql } from "graphql-transformer-core";
 import {
     DirectiveNode,
     ObjectTypeDefinitionNode
@@ -16,13 +18,14 @@ import {
     extensionWithFields,
     blankObject,
     makeListType,
-    makeInputValueDefinition,
-    makeNonNullType
+    makeInputValueDefinition
 } from "graphql-transformer-common";
-import { ResolverResourceIDs, SearchableResourceIDs } from 'graphql-transformer-common'
+import { Expression, str } from 'graphql-mapping-template';
+import { ResolverResourceIDs, SearchableResourceIDs, getBaseType } from 'graphql-transformer-common'
 import path = require('path');
 
 const STACK_NAME = 'SearchableStack';
+const nonKeywordTypes = ["Int", "Float", "Boolean", "AWSTimestamp", "AWSDate", "AWSDateTime"];
 
 interface QueryNameMap {
     search?: string;
@@ -41,7 +44,7 @@ export class SearchableModelTransformer extends Transformer {
     constructor() {
         super(
             `SearchableModelTransformer`,
-            `
+            gql`
             directive @searchable(queries: SearchableQueryMap) on OBJECT
             input SearchableQueryMap { search: String }
             `
@@ -55,13 +58,12 @@ export class SearchableModelTransformer extends Transformer {
         ctx.mergeParameters(template.Parameters);
         ctx.mergeOutputs(template.Outputs);
         ctx.metadata.set('ElasticsearchPathToStreamingLambda', path.resolve(`${__dirname}/../lib/streaming-lambda.zip`))
-        ctx.putStackMapping(STACK_NAME, [
-            'ElasticsearchDomain',
-            '^ElasticsearchAccess.*',
-            '^ElasticsearchStreaming.*',
-            '^ElasticsearchDataSource$',
-            '^Searchable.*LambdaMapping$'
-        ])
+        for (const resourceId of Object.keys(template.Resources)) {
+            ctx.mapResourceToStack(STACK_NAME, resourceId);
+        }
+        for (const outputId of Object.keys(template.Outputs)) {
+            ctx.mapResourceToStack(STACK_NAME, outputId);
+        }
     };
 
     /**
@@ -74,11 +76,7 @@ export class SearchableModelTransformer extends Transformer {
         directive: DirectiveNode,
         ctx: TransformerContext
     ): void => {
-        ctx.addToStackMapping(
-            STACK_NAME,
-            "^Search" + def.name.value + "Resolver$"
-        )
-        const directiveArguments: ModelDirectiveArgs = super.getDirectiveArgumentMap(directive)
+        const directiveArguments: ModelDirectiveArgs = getDirectiveArguments(directive)
         let shouldMakeSearch = true;
         let searchFieldNameOverride = undefined;
 
@@ -96,24 +94,38 @@ export class SearchableModelTransformer extends Transformer {
             SearchableResourceIDs.SearchableEventSourceMappingID(typeName),
             this.resources.makeDynamoDBStreamEventSourceMapping(typeName)
         )
+        ctx.mapResourceToStack(
+            STACK_NAME,
+            SearchableResourceIDs.SearchableEventSourceMappingID(typeName)
+        )
 
         //SearchablePostSortableFields
         const queryFields = [];
+        const nonKeywordFields: Expression[] = [];
+        def.fields.forEach( field => {
+            if (nonKeywordTypes.includes(getBaseType(field.type))) {
+                nonKeywordFields.push(str(field.name.value));
+            }
+        });
 
-        // Create listX
+        // Create list
         if (shouldMakeSearch) {
             this.generateSearchableInputs(ctx, def)
             this.generateSearchableXConnectionType(ctx, def)
 
-            const searchResolver = this.resources.makeSearchResolver(def.name.value, searchFieldNameOverride)
+            const searchResolver = this.resources.makeSearchResolver(def.name.value, nonKeywordFields, searchFieldNameOverride);
             ctx.setResource(ResolverResourceIDs.ElasticsearchSearchResolverResourceID(def.name.value), searchResolver)
+            ctx.mapResourceToStack(
+                STACK_NAME,
+                ResolverResourceIDs.ElasticsearchSearchResolverResourceID(def.name.value)
+            )
             queryFields.push(makeField(
                 searchResolver.Properties.FieldName,
                 [
                     makeInputValueDefinition('filter', makeNamedType(`Searchable${def.name.value}FilterInput`)),
                     makeInputValueDefinition('sort', makeNamedType(`Searchable${def.name.value}SortInput`)),
                     makeInputValueDefinition('limit', makeNamedType('Int')),
-                    makeInputValueDefinition('nextToken', makeNamedType('Int'))
+                    makeInputValueDefinition('nextToken', makeNamedType('String'))
                 ],
                 makeNamedType(`Searchable${def.name.value}Connection`)
             ))

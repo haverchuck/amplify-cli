@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "es5",
+        "sourceMap": true,
+        "outDir": "lib",
+        "lib": [
+            "es2015",
+            "es2016.array.include",
+            "esnext.asynciterable",
+            "dom"
+        ],
+        "esModuleInterop": true,
+        "resolveJsonModule": true
+    },
+    "exclude": [
+        "node_modules",
+        "lib"
+    ],
+    "include": ["src"]
+}
