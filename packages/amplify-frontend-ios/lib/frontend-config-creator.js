@@ -159,6 +159,8 @@ function getCognitoConfig(cognitoResources, projectRegion) {
     });
   }
 
+  cognitoConfig.customAuth = !!cognitoResources.find(i => i.customAuth);
+
   if (cognitoResource.output.GoogleWebClient || cognitoResource.output.GoogleIOSClient) {
     cognitoConfig.GoogleSignIn = {
       Permissions: 'email,profile,openid',

@@ -165,6 +165,9 @@ function getCognitoConfig(cognitoResources, projectRegion) {
   let redirectSignIn;
   let redirectSignOut;
 
+  cognitoConfig.customAuth = !!cognitoResources.find(i => i.customAuth);
+
+
   if (cognitoResource.output.HostedUIDomain) {
     domain = `${cognitoResource.output.HostedUIDomain}.auth.${projectRegion}.amazoncognito.com`;
   }
