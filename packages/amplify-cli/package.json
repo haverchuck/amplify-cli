@@ -52,6 +52,7 @@
     "amplify-dotnet-function-runtime-provider": "1.1.1",
     "amplify-dotnet-function-template-provider": "1.2.1",
     "amplify-frontend-android": "2.13.4",
+    "amplify-frontend-flutter": "0.0.1",
     "amplify-frontend-ios": "2.13.5",
     "amplify-frontend-javascript": "2.15.3",
     "amplify-go-function-runtime-provider": "1.1.1",
@@ -182,6 +183,11 @@
         "name": "codegen",
         "type": "util",
         "packageName": "amplify-codegen"
+      },
+      "flutter": {
+        "name": "flutter",
+        "type": "frontend",
+        "packageName": "amplify-frontend-flutter"
       },
       "android": {
         "name": "android",
